@@ -1,120 +1,120 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>MainWindow</class>
- <widget class="QMainWindow" name="MainWindow">
-  <property name="geometry">
-   <rect>
-    <x>0</x>
-    <y>0</y>
-    <width>1200</width>
-    <height>800</height>
-   </rect>
-  </property>
-  <property name="windowTitle">
-   <string>FlowPy - Görsel Algoritma Yorumlayıcı</string>
-  </property>
-  <widget class="QWidget" name="centralwidget">
-   <layout class="QVBoxLayout" name="centralLayout">
-    <item>
-     <widget class="QGraphicsView" name="graphicsView"/>
-    </item>
-   </layout>
-  </widget>
-  <widget class="QMenuBar" name="menubar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>1200</width>
-     <height>25</height>
-    </rect>
-   </property>
-   <widget class="QMenu" name="menuFile">
-    <property name="title">
-     <string>Dosya</string>
-    </property>
-   </widget>
-   <widget class="QMenu" name="menuRun">
-    <property name="title">
-     <string>Çalıştır</string>
-    </property>
-    <addaction name="actionRunFlow"/>
-   </widget>
-   <addaction name="menuFile"/>
-   <addaction name="menuRun"/>
-  </widget>
-  <widget class="QStatusBar" name="statusbar"/>
-  <widget class="QDockWidget" name="nodePanelDock">
-   <property name="windowTitle">
-    <string>Düğüm Paneli</string>
-   </property>
-   <attribute name="dockWidgetArea">
-    <number>1</number>
-   </attribute>
-   <widget class="QWidget" name="nodePanelContents">
-    <layout class="QVBoxLayout" name="nodePanelLayout">
-     <item>
-      <widget class="QListWidget" name="nodeListWidget">
-       <property name="dragEnabled">
-        <bool>true</bool>
-       </property>
-       <property name="dragDropMode">
-        <enum>QAbstractItemView::DragDropMode::DragOnly</enum>
-       </property>
-       <property name="defaultDropAction">
-        <enum>Qt::DropAction::CopyAction</enum>
-       </property>
-       <item>
-        <property name="text">
-         <string>Start</string>
+    <class>MainWindow</class>
+    <widget class="QMainWindow" name="MainWindow">
+        <property name="geometry">
+            <rect>
+                <x>0</x>
+                <y>0</y>
+                <width>1200</width>
+                <height>800</height>
+            </rect>
         </property>
-       </item>
-       <item>
-        <property name="text">
-         <string>Process</string>
+        <property name="windowTitle">
+            <string>FlowPy - Görsel Algoritma Yorumlayıcı</string>
         </property>
-       </item>
-       <item>
-        <property name="text">
-         <string>Decision</string>
-        </property>
-       </item>
-      </widget>
-     </item>
-    </layout>
-   </widget>
-  </widget>
-  <widget class="QDockWidget" name="consoleDock">
-   <property name="windowTitle">
-    <string>Konsol Çıktısı</string>
-   </property>
-   <attribute name="dockWidgetArea">
-    <number>8</number>
-   </attribute>
-   <widget class="QWidget" name="consoleDockContents">
-    <layout class="QVBoxLayout" name="consoleDockLayout">
-     <item>
-      <widget class="QTextEdit" name="consoleOutput">
-       <property name="readOnly">
-        <bool>true</bool>
-       </property>
-       <property name="placeholderText">
-        <string>Çalıştırma çıktıları burada görüntülenecek...</string>
-       </property>
-      </widget>
-     </item>
-    </layout>
-   </widget>
-  </widget>
-  <action name="actionRunFlow">
-   <property name="text">
-    <string>Akışı Çalıştır</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+R</string>
-   </property>
-  </action>
- </widget>
- <resources/>
- <connections/>
+        <widget class="QWidget" name="centralwidget">
+            <layout class="QVBoxLayout" name="centralLayout">
+                <item>
+                    <widget class="QGraphicsView" name="graphicsView" />
+                </item>
+            </layout>
+        </widget>
+        <widget class="QMenuBar" name="menubar">
+            <property name="geometry">
+                <rect>
+                    <x>0</x>
+                    <y>0</y>
+                    <width>1200</width>
+                    <height>25</height>
+                </rect>
+            </property>
+            <widget class="QMenu" name="menuFile">
+                <property name="title">
+                    <string>Dosya</string>
+                </property>
+            </widget>
+            <widget class="QMenu" name="menuRun">
+                <property name="title">
+                    <string>Çalıştır</string>
+                </property>
+                <addaction name="actionRunFlow" />
+            </widget>
+            <addaction name="menuFile" />
+            <addaction name="menuRun" />
+        </widget>
+        <widget class="QStatusBar" name="statusbar" />
+        <widget class="QDockWidget" name="nodePanelDock">
+            <property name="windowTitle">
+                <string>Düğüm Paneli</string>
+            </property>
+            <attribute name="dockWidgetArea">
+                <number>1</number>
+            </attribute>
+            <widget class="QWidget" name="nodePanelContents">
+                <layout class="QVBoxLayout" name="nodePanelLayout">
+                    <item>
+                        <widget class="QListWidget" name="nodeListWidget">
+                            <property name="dragEnabled">
+                                <bool>true</bool>
+                            </property>
+                            <property name="dragDropMode">
+                                <enum>QAbstractItemView::DragOnly</enum>
+                            </property>
+                            <property name="defaultDropAction">
+                                <enum>Qt::CopyAction</enum>
+                            </property>
+                            <item>
+                                <property name="text">
+                                    <string>Start</string>
+                                </property>
+                            </item>
+                            <item>
+                                <property name="text">
+                                    <string>Process</string>
+                                </property>
+                            </item>
+                            <item>
+                                <property name="text">
+                                    <string>Decision</string>
+                                </property>
+                            </item>
+                        </widget>
+                    </item>
+                </layout>
+            </widget>
+        </widget>
+        <widget class="QDockWidget" name="consoleDock">
+            <property name="windowTitle">
+                <string>Konsol Çıktısı</string>
+            </property>
+            <attribute name="dockWidgetArea">
+                <number>8</number>
+            </attribute>
+            <widget class="QWidget" name="consoleDockContents">
+                <layout class="QVBoxLayout" name="consoleDockLayout">
+                    <item>
+                        <widget class="QTextEdit" name="consoleOutput">
+                            <property name="readOnly">
+                                <bool>true</bool>
+                            </property>
+                            <property name="placeholderText">
+                                <string>Çalıştırma çıktıları burada görüntülenecek...</string>
+                            </property>
+                        </widget>
+                    </item>
+                </layout>
+            </widget>
+        </widget>
+        <action name="actionRunFlow">
+            <property name="text">
+                <string>Akışı Çalıştır</string>
+            </property>
+            <property name="shortcut">
+                <string>Ctrl+R</string>
+            </property>
+        </action>
+    </widget>
+    <resources />
+    <connections />
 </ui>
