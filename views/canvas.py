@@ -182,3 +182,103 @@ class FlowScene(QGraphicsScene):
         node.setPos(scene_pos)
         event.acceptProposedAction()
 
+    # ══════════════════════════════════════════════════════════════════
+    #  Silme & Bağlam Menüsü
+    # ══════════════════════════════════════════════════════════════════
+
+    def keyPressEvent(self, event):
+        """Delete tuşu ile seçili öğeleri sil."""
+        if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+            self.delete_selected()
+        else:
+            super().keyPressEvent(event)
+
+    def contextMenuEvent(self, event):
+        """Sağ tık bağlam menüsü."""
+        from PyQt6.QtWidgets import QMenu
+        from PyQt6.QtGui import QAction
+
+        menu = QMenu()
+
+        # Tıklanan noktadaki öğeyi kontrol et
+        item = self.itemAt(event.scenePos(), self.views()[0].transform())
+        target_node = None
+        if isinstance(item, BaseNode):
+            target_node = item
+        elif isinstance(item, Port):
+            target_node = item.parentItem()
+
+        if target_node and isinstance(target_node, BaseNode):
+            edit_action = QAction(f"✏️  Düzenle: {target_node.title}", menu)
+            edit_action.triggered.connect(
+                lambda: target_node.mouseDoubleClickEvent(None)
+            )
+            menu.addAction(edit_action)
+            menu.addSeparator()
+
+        # Seçili öğe varsa sil seçeneği
+        if self.selectedItems():
+            count = len([i for i in self.selectedItems()
+                         if isinstance(i, (BaseNode, Edge))])
+            if count:
+                del_action = QAction(f"🗑️  Seçilenleri Sil ({count})", menu)
+                del_action.triggered.connect(self.delete_selected)
+                menu.addAction(del_action)
+
+        select_all_action = QAction("☐  Tümünü Seç", menu)
+        select_all_action.triggered.connect(self._select_all)
+        menu.addAction(select_all_action)
+
+        menu.exec(event.screenPos())
+
+    def delete_selected(self):
+        """Seçili düğüm ve edge'leri sahneden ve registry'den siler."""
+        items = self.selectedItems()
+        if not items:
+            return
+
+        # Önce edge'leri sil (sonra node silince referans sorununu önle)
+        for item in list(items):
+            if isinstance(item, Edge):
+                self._remove_edge(item)
+
+        # Sonra node'ları sil
+        for item in list(items):
+            if isinstance(item, BaseNode):
+                self._remove_node(item)
+
+    def _remove_node(self, node: BaseNode):
+        """Düğümü ve ona bağlı tüm edge'leri siler."""
+        # Bağlı edge'leri temizle
+        for edge in list(node.edges):
+            self._remove_edge(edge)
+
+        # Registry'den sil
+        self.registry.remove_node(node.node_id)
+
+        # Sahneden kaldır
+        self.removeItem(node)
+
+    def _remove_edge(self, edge: Edge):
+        """Edge'i sahneden, düğümlerin listelerinden ve registry'den siler."""
+        # Düğümlerin edge listelerinden çıkar
+        if edge.source_node and edge in edge.source_node.edges:
+            edge.source_node.edges.remove(edge)
+        if edge.dest_node and edge in edge.dest_node.edges:
+            edge.dest_node.edges.remove(edge)
+
+        # Registry'den edge'i kaldır
+        self.registry.edges = [
+            (s, d) for s, d in self.registry.edges
+            if not (s == edge.source_node.node_id and d == edge.dest_node.node_id)
+        ]
+
+        # Sahneden kaldır
+        if edge.scene():
+            self.removeItem(edge)
+
+    def _select_all(self):
+        """Tüm düğümleri seçer."""
+        for item in self.items():
+            if isinstance(item, BaseNode):
+                item.setSelected(True)

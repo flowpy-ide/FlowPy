@@ -4,7 +4,7 @@
 #         dinamik bağlantı oku.
 # ──────────────────────────────────────────────────────────────────────
 
-from PyQt6.QtWidgets import QGraphicsPathItem
+from PyQt6.QtWidgets import QGraphicsPathItem, QGraphicsItem
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPainterPath, QPen, QColor
 
@@ -26,6 +26,8 @@ class Edge(QGraphicsPathItem):
         self.setPen(QPen(QColor("#2980b9"), 2.5))
         # Oklar düğümlerin altında kalsın
         self.setZValue(-1)
+        # Seçilebilir yap (silme için)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
 
         # Oku her iki düğümün edge listesine kaydet
         self.source_node.edges.append(self)
