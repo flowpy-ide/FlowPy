@@ -4,9 +4,9 @@
 # Port      : Düğümlerin giriş/çıkış bağlantı noktaları.
 # ──────────────────────────────────────────────────────────────────────
 
-from PyQt5.QtWidgets import QGraphicsItem, QGraphicsEllipseItem
-from PyQt5.QtCore import QRectF, Qt, QPointF
-from PyQt5.QtGui import (QPainter, QColor, QPen, QBrush, QFont,
+from PyQt6.QtWidgets import QGraphicsItem, QGraphicsEllipseItem
+from PyQt6.QtCore import QRectF, Qt, QPointF
+from PyQt6.QtGui import (QPainter, QColor, QPen, QBrush, QFont,
                          QLinearGradient)
 
 
@@ -29,7 +29,7 @@ class Port(QGraphicsEllipseItem):
         self._base_color = QColor("#2ecc71") if is_output else QColor("#3498db")
         self.setBrush(QBrush(self._base_color))
         self.setPen(QPen(QColor("#2c3e50"), 1.5))
-        self.setCursor(Qt.CrossCursor)
+        self.setCursor(Qt.CursorShape.CrossCursor)
 
         # Hover efekti için bayraklar
         self.setAcceptHoverEvents(True)
@@ -52,7 +52,7 @@ class Port(QGraphicsEllipseItem):
 
     def mousePressEvent(self, event):
         """Porta tıklandığında bağlantı çizimini başlat."""
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             scene = self.scene()
             if scene and hasattr(scene, 'start_connection'):
                 scene.start_connection(self)
@@ -71,7 +71,7 @@ class Port(QGraphicsEllipseItem):
 
     def mouseReleaseEvent(self, event):
         """Bırakıldığında bağlantıyı tamamla veya iptal et."""
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             scene = self.scene()
             if scene and hasattr(scene, 'finish_connection'):
                 scene.finish_connection(event.scenePos())
@@ -106,9 +106,9 @@ class BaseNode(QGraphicsItem):
         self.node_id = node_id          # Registry tarafından atanır
 
         # ── Bayraklar ─────────────────────────────────────────────────
-        self.setFlag(QGraphicsItem.ItemIsMovable)
-        self.setFlag(QGraphicsItem.ItemIsSelectable)
-        self.setFlag(QGraphicsItem.ItemSendsGeometryChanges)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges)
 
         # ── Portlar ──────────────────────────────────────────────────
         self.input_ports: list[Port] = []
@@ -162,16 +162,16 @@ class BaseNode(QGraphicsItem):
         painter.drawRoundedRect(rect, self.CORNER_RADIUS, self.CORNER_RADIUS)
 
         # ── Başlık Metni ─────────────────────────────────────────────
-        font = QFont("Segoe UI", 10, QFont.Bold)
+        font = QFont("Segoe UI", 10, QFont.Weight.Bold)
         painter.setFont(font)
-        painter.setPen(QPen(Qt.white))
-        painter.drawText(rect, Qt.AlignCenter, self.title)
+        painter.setPen(QPen(Qt.GlobalColor.white))
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self.title)
 
     # ── Konum Değişikliği → Edge Güncelleme ──────────────────────────
 
     def itemChange(self, change, value):
         """Düğüm sürüklendiğinde bağlı okları yeniden çizer."""
-        if change == QGraphicsItem.ItemPositionChange:
+        if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
             for edge in self.edges:
                 edge.update_path()
         return super().itemChange(change, value)

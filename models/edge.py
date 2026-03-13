@@ -4,9 +4,9 @@
 #         dinamik bağlantı oku.
 # ──────────────────────────────────────────────────────────────────────
 
-from PyQt5.QtWidgets import QGraphicsPathItem
-from PyQt5.QtCore import QPointF
-from PyQt5.QtGui import QPainterPath, QPen, QColor
+from PyQt6.QtWidgets import QGraphicsPathItem
+from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QPainterPath, QPen, QColor
 
 
 class Edge(QGraphicsPathItem):

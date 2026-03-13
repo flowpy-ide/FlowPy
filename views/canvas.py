@@ -4,9 +4,9 @@
 #              düğüm oluşturma, port bağlantıları ve NodeRegistry.
 # ──────────────────────────────────────────────────────────────────────
 
-from PyQt5.QtWidgets import QGraphicsScene, QGraphicsPathItem
-from PyQt5.QtCore import Qt, QByteArray, QDataStream, QIODevice, QPointF
-from PyQt5.QtGui import QPen, QColor, QPainterPath
+from PyQt6.QtWidgets import QGraphicsScene, QGraphicsPathItem
+from PyQt6.QtCore import Qt, QByteArray, QDataStream, QIODevice, QPointF
+from PyQt6.QtGui import QPen, QColor, QPainterPath
 
 from models.node import BaseNode, Port
 from models.edge import Edge
@@ -41,7 +41,7 @@ class FlowScene(QGraphicsScene):
 
         # Geçici Bezier çizgisi oluştur
         self._temp_edge = QGraphicsPathItem()
-        self._temp_edge.setPen(QPen(QColor("#e74c3c"), 2, Qt.DashLine))
+        self._temp_edge.setPen(QPen(QColor("#e74c3c"), 2, Qt.PenStyle.DashLine))
         self._temp_edge.setZValue(-1)
         self.addItem(self._temp_edge)
 
@@ -142,7 +142,7 @@ class FlowScene(QGraphicsScene):
 
         if mime_data.hasFormat(_LIST_MIME):
             data = mime_data.data(_LIST_MIME)
-            stream = QDataStream(data, QIODevice.ReadOnly)
+            stream = QDataStream(data, QIODevice.OpenModeFlag.ReadOnly)
             while not stream.atEnd():
                 row = stream.readInt32()
                 col = stream.readInt32()
@@ -150,7 +150,7 @@ class FlowScene(QGraphicsScene):
                 for _ in range(map_items):
                     role = stream.readInt32()
                     value = stream.readQVariant()
-                    if role == Qt.DisplayRole:
+                    if role == Qt.ItemDataRole.DisplayRole:
                         text = str(value).strip()
                         if text:
                             return text

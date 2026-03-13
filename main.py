@@ -7,8 +7,8 @@
 import sys
 import os
 
-from PyQt5.QtWidgets import QApplication, QMainWindow
-from PyQt5 import uic
+from PyQt6.QtWidgets import QApplication, QMainWindow
+from PyQt6 import uic
 
 from core.registry import NodeRegistry
 from core.interpreter import Interpreter
@@ -54,4 +54,4 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = FlowPyApp()
     window.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

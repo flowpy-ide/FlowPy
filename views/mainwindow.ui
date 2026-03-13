@@ -59,10 +59,10 @@
                                 <bool>true</bool>
                             </property>
                             <property name="dragDropMode">
-                                <enum>QAbstractItemView::DragOnly</enum>
+                                <enum>QAbstractItemView::DragDropMode::DragOnly</enum>
                             </property>
                             <property name="defaultDropAction">
-                                <enum>Qt::CopyAction</enum>
+                                <enum>Qt::DropAction::CopyAction</enum>
                             </property>
                             <item>
                                 <property name="text">
