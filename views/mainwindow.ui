@@ -44,6 +44,21 @@
             <addaction name="menuRun" />
         </widget>
         <widget class="QStatusBar" name="statusbar" />
+        <!-- ═══ Araç Çubuğu (Toolbar) ═══ -->
+        <widget class="QToolBar" name="mainToolBar">
+            <property name="windowTitle">
+                <string>Araç Çubuğu</string>
+            </property>
+            <attribute name="toolBarArea">
+                <enum>TopToolBarArea</enum>
+            </attribute>
+            <attribute name="toolBarBreak">
+                <bool>false</bool>
+            </attribute>
+            <addaction name="actionRunFlow" />
+            <addaction name="actionStepFlow" />
+            <addaction name="actionStopFlow" />
+        </widget>
         <!-- ═══ Sol Dock: Düğüm Paneli ═══ -->
         <widget class="QDockWidget" name="nodePanelDock">
             <property name="windowTitle">
@@ -134,6 +149,36 @@
                 </layout>
             </widget>
         </widget>
+        <!-- ═══ Değişken İzleyici Dock ═══ -->
+        <widget class="QDockWidget" name="variableDock">
+            <property name="windowTitle">
+                <string>Değişkenler (Watcher)</string>
+            </property>
+            <attribute name="dockWidgetArea">
+                <number>2</number>
+            </attribute>
+            <widget class="QWidget" name="variableDockContents">
+                <layout class="QVBoxLayout" name="variableLayout">
+                    <item>
+                        <widget class="QTableWidget" name="variableTable">
+                            <property name="columnCount">
+                                <number>2</number>
+                            </property>
+                            <column>
+                                <property name="text">
+                                    <string>Değişken</string>
+                                </property>
+                            </column>
+                            <column>
+                                <property name="text">
+                                    <string>Değer</string>
+                                </property>
+                            </column>
+                        </widget>
+                    </item>
+                </layout>
+            </widget>
+        </widget>
         <!-- ═══ Alt Dock: Konsol ═══ -->
         <widget class="QDockWidget" name="consoleDock">
             <property name="windowTitle">
@@ -159,10 +204,44 @@
         </widget>
         <action name="actionRunFlow">
             <property name="text">
-                <string>Akışı Çalıştır</string>
+                <string>▶ Run All</string>
+            </property>
+            <property name="iconText">
+                <string>▶ Run All</string>
             </property>
             <property name="shortcut">
                 <string>Ctrl+R</string>
+            </property>
+            <property name="toolTip">
+                <string>Akışı tamamen çalıştır</string>
+            </property>
+        </action>
+        <action name="actionStepFlow">
+            <property name="text">
+                <string>⏭ Step</string>
+            </property>
+            <property name="iconText">
+                <string>⏭ Step</string>
+            </property>
+            <property name="shortcut">
+                <string>F10</string>
+            </property>
+            <property name="toolTip">
+                <string>Adım Adım Çalıştır</string>
+            </property>
+        </action>
+        <action name="actionStopFlow">
+            <property name="text">
+                <string>⏹ Stop</string>
+            </property>
+            <property name="iconText">
+                <string>⏹ Stop</string>
+            </property>
+            <property name="shortcut">
+                <string>Shift+F5</string>
+            </property>
+            <property name="toolTip">
+                <string>Çalışmayı Durdur</string>
             </property>
         </action>
     </widget>

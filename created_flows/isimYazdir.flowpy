@@ -1,0 +1,47 @@
+{
+  "nodes": [
+    {
+      "id": "ed0f9d59-14b2-4ae4-919a-0f6d381f6ca3",
+      "title": "Decision",
+      "x": 68.0,
+      "y": -72.0,
+      "properties": {
+        "condition": "if name",
+        "description": ""
+      }
+    },
+    {
+      "id": "93f552e2-7c82-4fa8-a0ef-2b9c5e065f85",
+      "title": "Process",
+      "x": 42.0,
+      "y": 48.0,
+      "properties": {
+        "code": "print(name)",
+        "description": ""
+      }
+    },
+    {
+      "id": "bca36b71-e2e2-45f1-a950-87c491e98e31",
+      "title": "Start",
+      "x": -210.0,
+      "y": -212.0,
+      "properties": {
+        "variables": "name = \"Erkan\""
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source_id": "bca36b71-e2e2-45f1-a950-87c491e98e31",
+      "dest_id": "ed0f9d59-14b2-4ae4-919a-0f6d381f6ca3",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "ed0f9d59-14b2-4ae4-919a-0f6d381f6ca3",
+      "dest_id": "93f552e2-7c82-4fa8-a0ef-2b9c5e065f85",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    }
+  ]
+}

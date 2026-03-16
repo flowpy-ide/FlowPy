@@ -5,8 +5,8 @@
 # ──────────────────────────────────────────────────────────────────────
 
 from PyQt6.QtWidgets import QGraphicsScene, QGraphicsPathItem
-from PyQt6.QtCore import Qt, QByteArray, QDataStream, QIODevice, QPointF
-from PyQt6.QtGui import QPen, QColor, QPainterPath
+from PyQt6.QtCore import Qt, QByteArray, QDataStream, QIODevice, QPointF, QObject, QEvent, pyqtSignal
+from PyQt6.QtGui import QPen, QColor, QPainterPath, QBrush, QPainter
 
 from models.node import BaseNode, Port
 from models.edge import Edge
@@ -16,14 +16,78 @@ from core.registry import NodeRegistry
 _LIST_MIME = "application/x-qabstractitemmodeldatalist"
 
 
+class ZoomPanFilter(QObject):
+    """QGraphicsView üzerinde zoom (Ctrl+Wheel) ve pan (Orta Tuş) işlemlerini yönetir."""
+    
+    def __init__(self, view, parent=None):
+        super().__init__(parent)
+        self.view = view
+        self._pan_active = False
+        self._pan_start_x = 0
+        self._pan_start_y = 0
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.Wheel:
+            # Ctrl + Wheel ile Zoom
+            if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+                # Zoom in / out hesapla
+                zoom_in_factor = 1.15
+                zoom_out_factor = 1.0 / zoom_in_factor
+                
+                # Tekerleğin yönüne göre zoom faktörü seç
+                if event.angleDelta().y() > 0:
+                    zoom_factor = zoom_in_factor
+                else:
+                    zoom_factor = zoom_out_factor
+                    
+                self.view.scale(zoom_factor, zoom_factor)
+                return True
+                
+        elif event.type() == QEvent.Type.MouseButtonPress:
+            if event.button() == Qt.MouseButton.MiddleButton:
+                self._pan_active = True
+                self._pan_start_x = event.globalPosition().x()
+                self._pan_start_y = event.globalPosition().y()
+                self.view.setCursor(Qt.CursorShape.ClosedHandCursor)
+                return True
+                
+        elif event.type() == QEvent.Type.MouseMove:
+            if self._pan_active:
+                dx = event.globalPosition().x() - self._pan_start_x
+                dy = event.globalPosition().y() - self._pan_start_y
+                self._pan_start_x = event.globalPosition().x()
+                self._pan_start_y = event.globalPosition().y()
+                
+                # Scroll barların değerini değiştirerek pan yap
+                scroll_x = self.view.horizontalScrollBar()
+                scroll_y = self.view.verticalScrollBar()
+                scroll_x.setValue(int(scroll_x.value() - dx))
+                scroll_y.setValue(int(scroll_y.value() - dy))
+                return True
+                
+        elif event.type() == QEvent.Type.MouseButtonRelease:
+            if event.button() == Qt.MouseButton.MiddleButton:
+                self._pan_active = False
+                self.view.setCursor(Qt.CursorShape.ArrowCursor)
+                return True
+
+        return super().eventFilter(obj, event)
+
+
 class FlowScene(QGraphicsScene):
     """Sürükle-bırak destekli düğüm sahne yöneticisi."""
+    
+    history_changed = pyqtSignal()
 
     def __init__(self, registry: NodeRegistry, parent=None):
         super().__init__(parent)
         self.registry = registry
         # Varsayılan sahne boyutu
-        self.setSceneRect(-1000, -1000, 2000, 2000)
+        self.setSceneRect(-2000, -2000, 4000, 4000)
+
+        # ── Koyu Grid Arkaplan ───────────────────────────────────────
+        self.setBackgroundBrush(QBrush(QColor("#1e1e1e")))
+        self.setItemIndexMethod(QGraphicsScene.ItemIndexMethod.BspTreeIndex)
 
         # ── Bağlantı durumu ──────────────────────────────────────────
         self._connecting = False       # Bağlantı çizimi aktif mi?
@@ -107,6 +171,7 @@ class FlowScene(QGraphicsScene):
                 edge.source_node.node_id,
                 edge.dest_node.node_id
             )
+            self.history_changed.emit()
 
         # Durumu sıfırla
         self._connecting = False
@@ -124,6 +189,40 @@ class FlowScene(QGraphicsScene):
         if port_a.parentItem() is port_b.parentItem():
             return False  # Aynı düğüm
         return True
+
+    def drawBackground(self, painter: QPainter, rect):
+        """Koyu tema ızgara desenli arkaplan çizer."""
+        super().drawBackground(painter, rect)
+        
+        left = int(rect.left()) - (int(rect.left()) % 20)
+        top = int(rect.top()) - (int(rect.top()) % 20)
+        
+        lines = []
+        # Küçük grid çizgileri (her 20px)
+        for x in range(left, int(rect.right()), 20):
+            lines.append(QPointF(x, rect.top()))
+            lines.append(QPointF(x, rect.bottom()))
+        for y in range(top, int(rect.bottom()), 20):
+            lines.append(QPointF(rect.left(), y))
+            lines.append(QPointF(rect.right(), y))
+            
+        painter.setPen(QPen(QColor("#2c2c2c"), 1, Qt.PenStyle.SolidLine))
+        painter.drawLines(lines)
+        
+        # Büyük grid çizgileri (her 100px)
+        left = int(rect.left()) - (int(rect.left()) % 100)
+        top = int(rect.top()) - (int(rect.top()) % 100)
+        
+        thick_lines = []
+        for x in range(left, int(rect.right()), 100):
+            thick_lines.append(QPointF(x, rect.top()))
+            thick_lines.append(QPointF(x, rect.bottom()))
+        for y in range(top, int(rect.bottom()), 100):
+            thick_lines.append(QPointF(rect.left(), y))
+            thick_lines.append(QPointF(rect.right(), y))
+            
+        painter.setPen(QPen(QColor("#3a3a3a"), 1, Qt.PenStyle.SolidLine))
+        painter.drawLines(thick_lines)
 
     # ══════════════════════════════════════════════════════════════════
     #  Sürükle-Bırak (Panelden Düğüm Ekleme)
@@ -181,6 +280,7 @@ class FlowScene(QGraphicsScene):
         self.addItem(node)
         node.setPos(scene_pos)
         event.acceptProposedAction()
+        self.history_changed.emit()
 
     # ══════════════════════════════════════════════════════════════════
     #  Silme & Bağlam Menüsü
@@ -246,6 +346,8 @@ class FlowScene(QGraphicsScene):
         for item in list(items):
             if isinstance(item, BaseNode):
                 self._remove_node(item)
+                
+        self.history_changed.emit()
 
     def _remove_node(self, node: BaseNode):
         """Düğümü ve ona bağlı tüm edge'leri siler."""

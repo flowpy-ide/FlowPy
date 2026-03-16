@@ -1,40 +1,88 @@
 # core/interpreter.py
 # ──────────────────────────────────────────────────────────────────────
-# Interpreter : Sahnedeki düğüm akışını gerçekten çalıştıran motor.
-#               Start → Process (exec) → Decision (eval → dallanma)
-#               → While (döngü) düğümlerini yürütür.
-#               Çalışan düğümü vurgulama (highlight) desteği.
+# Interpreter : Sahnedeki düğüm akışını adımlı (State Machine) olarak
+#               çalıştıran motor.
 # ──────────────────────────────────────────────────────────────────────
 
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer, QCoreApplication
 from core.registry import NodeRegistry
 
-
 class Interpreter(QObject):
-    """Registry'deki düğümleri akış sırasıyla çalıştıran yorumlayıcı."""
+    """Registry'deki düğümleri state machine yapısıyla çalıştıran yorumlayıcı."""
 
     log_message = pyqtSignal(str)
-    # Çalıştırma vurgulama sinyalleri
-    highlight_node = pyqtSignal(object)       # düğümü vurgula
-    clear_highlights = pyqtSignal()            # tüm vurguları temizle
+    highlight_node = pyqtSignal(object)       
+    clear_highlights = pyqtSignal()           
+    
+    # Yeni sinyaller: Debugger ve Watcher için
+    scope_changed = pyqtSignal(dict)
+    flow_state_changed = pyqtSignal(bool, bool)  # (is_active, is_paused)
 
     def __init__(self, registry: NodeRegistry, parent=None):
         super().__init__(parent)
         self.registry = registry
         self._scope: dict = {}
+        
+        # State Machine Değişkenleri
+        self._current_node = None
+        self._current_step = 0
+        self._is_active = False
+        self._is_paused = False
+        self.MAX_STEPS = 500
 
     # ══════════════════════════════════════════════════════════════════
-    #  Ana Çalıştırma Döngüsü
+    #  Kontrolcüler (Run / Step / Stop)
     # ══════════════════════════════════════════════════════════════════
 
     def run_flow(self):
-        """Start düğümünden başlayarak akışı adım adım yürütür."""
+        """Akışı başlatır ve (eğer duraklatılmışsa) kesintisiz devam ettirir."""
+        if not self._is_active:
+            if not self._init_flow():
+                return
+                
+        self._is_paused = False
+        self.flow_state_changed.emit(True, False)
+        self.log_message.emit("▶  Akış yürütülüyor…")
+        
+        # Tamamlanana veya duraklatılana kadar çalış
+        while self._current_node and not self._is_paused:
+            self._process_current_node()
+            QCoreApplication.processEvents()
+
+    def step_flow(self):
+        """Akışı sadece bir düğüm işleyecek şekilde ilerletir."""
+        if not self._is_active:
+            if not self._init_flow():
+                return
+                
+        self._is_paused = True
+        self.flow_state_changed.emit(True, True)
+        self._process_current_node()
+
+    def stop_flow(self):
+        """Çalıştırılan akışı tamamen iptal eder."""
+        if not self._is_active:
+            return
+            
+        self._is_active = False
+        self._is_paused = False
+        self._current_node = None
+        self.flow_state_changed.emit(False, False)
+        self.clear_highlights.emit()
+        self.log_message.emit("⏹ Çalıştırma durduruldu.")
+
+    # ══════════════════════════════════════════════════════════════════
+    #  İç Mantık
+    # ══════════════════════════════════════════════════════════════════
+
+    def _init_flow(self) -> bool:
+        """Sahnede Start düğümünü bulur ve state'i sıfırlar."""
         self.clear_highlights.emit()
         nodes = self.registry.get_all_nodes()
 
         if not nodes:
             self.log_message.emit("⚠  Sahnede çalıştırılacak düğüm bulunamadı.")
-            return
+            return False
 
         start_node = None
         for node_id, node in nodes.items():
@@ -44,57 +92,70 @@ class Interpreter(QObject):
 
         if not start_node:
             self.log_message.emit("⚠  Akışta bir 'Start' düğümü bulunamadı!")
-            return
+            return False
 
         self._scope = {}
-
+        self.scope_changed.emit(self._scope)
+        self._current_step = 1
+        self._current_node = start_node
+        self._is_active = True
+        
         self.log_message.emit("═" * 50)
-        self.log_message.emit("▶  Akış çalıştırılıyor…")
+        self.log_message.emit("🔄 Oturum Başladı")
         self.log_message.emit("═" * 50)
+        
+        # İlk düğümü vurgula
+        self.highlight_node.emit(self._current_node)
+        return True
 
-        self._execute_node(start_node, step=1)
-
+    def _finish_flow(self):
+        """Akış başarıyla bittiğinde çağrılır."""
         self.log_message.emit("═" * 50)
         self.log_message.emit("✔  Akış tamamlandı.")
-        self.log_message.emit(f"   Değişkenler: {self._scope}")
+        self.log_message.emit(f"   Sonuç Değişkenler: {self._scope}")
         self.log_message.emit("")
-
-        # Kısa bir gecikme sonra vurguları temizle
+        
+        self._is_active = False
+        self._is_paused = False
+        self._current_node = None
+        self.flow_state_changed.emit(False, False)
         QTimer.singleShot(1500, self.clear_highlights.emit)
 
-    # ══════════════════════════════════════════════════════════════════
-    #  Düğüm Yürütme
-    # ══════════════════════════════════════════════════════════════════
-
-    def _execute_node(self, node, step: int = 1, max_steps: int = 500):
-        """Verilen düğümü çalıştır, sonra bağlı bir sonraki düğüme geç."""
-        if step > max_steps:
+    def _process_current_node(self):
+        """Sıradaki tek düğümü çalıştırır ve state'i günceller."""
+        if not self._current_node:
+            self._finish_flow()
+            return
+            
+        if self._current_step > self.MAX_STEPS:
             self.log_message.emit("⚠  Maksimum adım sayısına ulaşıldı (sonsuz döngü?)")
-            return step
+            self.stop_flow()
+            return
 
+        node = self._current_node
+        step = self._current_step
+        
         title = getattr(node, "title", "?")
         node_id = getattr(node, "node_id", "?")
         short_id = node_id[:8] if len(node_id) >= 8 else node_id
 
         # Düğümü vurgula
         self.highlight_node.emit(node)
-        QCoreApplication.processEvents()  # UI güncellenmesini bekle
-
+        
+        next_node = None
+        
         # ── START ────────────────────────────────────────────────────
         if title == "Start":
             self.log_message.emit(f"  [{step}] ▶ START (ID: {short_id})")
             vars_code = node.properties.get("variables", "").strip()
             if vars_code:
-                self.log_message.emit(f"       Değişkenler tanımlanıyor…")
                 try:
                     exec(vars_code, {}, self._scope)
-                    self.log_message.emit(f"       ✔ {self._scope}")
+                    self.log_message.emit(f"       ✔ Değişkenler atandı.")
                 except Exception as e:
                     self.log_message.emit(f"       ✗ Hata: {e}")
-
-            next_node = self._get_next_node(node, port_index=0)
-            if next_node:
-                return self._execute_node(next_node, step + 1, max_steps)
+            
+            next_node = self._get_next_node(node, 0)
 
         # ── PROCESS ──────────────────────────────────────────────────
         elif title == "Process":
@@ -104,18 +165,13 @@ class Interpreter(QObject):
             self.log_message.emit(f"  [{step}] ⚙ PROCESS{desc_str} (ID: {short_id})")
 
             if code:
-                self.log_message.emit(f"       Kod: {code.split(chr(10))[0]}…")
                 try:
                     exec(code, {"__builtins__": __builtins__}, self._scope)
-                    self.log_message.emit(f"       ✔ Çalıştırıldı → {self._scope}")
+                    self.log_message.emit(f"       ✔ Çalıştırıldı.")
                 except Exception as e:
                     self.log_message.emit(f"       ✗ Hata: {e}")
-            else:
-                self.log_message.emit(f"       (boş — kod tanımlanmamış)")
-
-            next_node = self._get_next_node(node, port_index=0)
-            if next_node:
-                return self._execute_node(next_node, step + 1, max_steps)
+            
+            next_node = self._get_next_node(node, 0)
 
         # ── DECISION ─────────────────────────────────────────────────
         elif title == "Decision":
@@ -124,27 +180,20 @@ class Interpreter(QObject):
             desc_str = f" ({desc})" if desc else ""
             self.log_message.emit(f"  [{step}] ❓ DECISION{desc_str} (ID: {short_id})")
 
-            if not condition:
-                self.log_message.emit(f"       ⚠ Koşul tanımlanmamış, atlanıyor…")
-                return step
-
-            try:
-                result = eval(condition, {"__builtins__": __builtins__}, self._scope)
-                result_bool = bool(result)
-                self.log_message.emit(
-                    f"       Koşul: {condition} → {'✓ True' if result_bool else '✗ False'}"
-                )
-            except Exception as e:
-                self.log_message.emit(f"       ✗ Hata: {e}")
-                return step
-
-            port_index = 0 if result_bool else 1
-            next_node = self._get_next_node(node, port_index=port_index)
-            if next_node:
-                return self._execute_node(next_node, step + 1, max_steps)
+            if condition:
+                try:
+                    result = eval(condition, {"__builtins__": __builtins__}, self._scope)
+                    result_bool = bool(result)
+                    self.log_message.emit(f"       Koşul: {condition} → {'✓ True' if result_bool else '✗ False'}")
+                except Exception as e:
+                    self.log_message.emit(f"       ✗ Hata: {e}")
+                    result_bool = False
             else:
-                branch = "True" if result_bool else "False"
-                self.log_message.emit(f"       ({branch} dalında bağlı düğüm yok)")
+                self.log_message.emit(f"       ⚠ Koşul yok, atlanıyor (False sayıldı).")
+                result_bool = False
+                
+            port_index = 0 if result_bool else 1
+            next_node = self._get_next_node(node, port_index)
 
         # ── WHILE ────────────────────────────────────────────────────
         elif title == "While":
@@ -153,73 +202,50 @@ class Interpreter(QObject):
             desc_str = f" ({desc})" if desc else ""
             self.log_message.emit(f"  [{step}] 🔁 WHILE{desc_str} (ID: {short_id})")
 
-            if not condition:
-                self.log_message.emit(f"       ⚠ Döngü koşulu tanımlanmamış, atlanıyor…")
-                return step
-
-            iteration = 0
-            while step <= max_steps:
-                # Koşulu değerlendir
+            if condition:
                 try:
                     result = eval(condition, {"__builtins__": __builtins__}, self._scope)
                     result_bool = bool(result)
+                    self.log_message.emit(f"       Koşul: {condition} → {'✓ True (Loop)' if result_bool else '✗ False (Exit)'}")
                 except Exception as e:
                     self.log_message.emit(f"       ✗ Koşul hatası: {e}")
-                    return step
-
-                if not result_bool:
-                    # Koşul False → çıkış portuna git
-                    self.log_message.emit(
-                        f"       Döngü sona erdi (iterasyon: {iteration})"
-                    )
-                    exit_node = self._get_next_node(node, port_index=1)
-                    if exit_node:
-                        return self._execute_node(exit_node, step + 1, max_steps)
-                    return step
-
-                iteration += 1
-                self.log_message.emit(
-                    f"       İterasyon {iteration}: {condition} → ✓ True"
-                )
-
-                # Loop body portuna git (index 0)
-                loop_body = self._get_next_node(node, port_index=0)
-                if loop_body:
-                    step = self._execute_node(loop_body, step + 1, max_steps)
-                    if step is None:
-                        step = max_steps + 1
-                else:
-                    self.log_message.emit(f"       (döngü gövdesi bağlı değil)")
-                    break
-
-                # Vurgula
-                self.highlight_node.emit(node)
-                QCoreApplication.processEvents()
-
-            if step > max_steps:
-                self.log_message.emit("⚠  Döngü: maksimum adım sayısı aşıldı!")
+                    result_bool = False
+            else:
+                self.log_message.emit(f"       ⚠ Döngü koşulu yok, atlanıyor (Exit).")
+                result_bool = False
+                
+            # If True, loop body (port 0). If False, exit (port 1).
+            port_index = 0 if result_bool else 1
+            next_node = self._get_next_node(node, port_index)
 
         else:
             self.log_message.emit(f"  [{step}] 📦 {title} (ID: {short_id})")
-            next_node = self._get_next_node(node, port_index=0)
-            if next_node:
-                return self._execute_node(next_node, step + 1, max_steps)
+            next_node = self._get_next_node(node, 0)
 
-        return step
+        # Değişken tablosunu güncelle
+        self.scope_changed.emit(self._scope.copy())
+        
+        # Sonraki adıma hazırlan
+        self._current_step += 1
+        self._current_node = next_node
+        
+        # Eğer sonraki düğüm yoksa hemen bitir
+        if not self._current_node:
+            self._finish_flow()
+        else:
+            # Duraklatılmış moddaysak, sıradaki bekleyen düğümü vurgula
+            if self._is_paused:
+                self.highlight_node.emit(self._current_node)
 
     # ══════════════════════════════════════════════════════════════════
-    #  Graf Takibi Yardımcıları
+    #  Yardımcılar
     # ══════════════════════════════════════════════════════════════════
 
     def _get_next_node(self, current_node, port_index: int = 0):
-        """Belirtilen çıkış portundan bağlı olan sonraki düğümü döndürür."""
         if port_index >= len(current_node.output_ports):
             return None
-
         source_port = current_node.output_ports[port_index]
-
         for edge in current_node.edges:
             if getattr(edge, 'source_port', None) is source_port:
                 return edge.dest_node
-
         return None

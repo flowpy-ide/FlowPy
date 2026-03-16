@@ -298,6 +298,15 @@ class BaseNode(QGraphicsItem):
             new_props = dialog.get_properties()
             self.properties.update(new_props)
             self.update()  # Yeniden çizim tetikle
+            
+            if self.scene() and hasattr(self.scene(), "history_changed"):
+                self.scene().history_changed.emit()
+
+    def mouseReleaseEvent(self, event):
+        """Sürükleme bırakıldığında durumu kaydeder."""
+        super().mouseReleaseEvent(event)
+        if self.scene() and hasattr(self.scene(), "history_changed"):
+            self.scene().history_changed.emit()
 
     # ── Konum Değişikliği → Edge Güncelleme ──────────────────────────
 

@@ -8,14 +8,16 @@ import sys
 import os
 
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QFileDialog,
-                              QListWidgetItem)
+                              QListWidgetItem, QTableWidgetItem, QHeaderView)
 from PyQt6 import uic
-from PyQt6.QtGui import QAction
+from PyQt6.QtGui import QAction, QPalette, QColor
+from PyQt6.QtCore import Qt
 
 from core.registry import NodeRegistry
 from core.interpreter import Interpreter
 from core.serializer import FlowSerializer
-from views.canvas import FlowScene
+from core.undo import UndoManager
+from views.canvas import FlowScene, ZoomPanFilter
 from models.node import BaseNode
 
 
@@ -36,6 +38,10 @@ class FlowPyApp(QMainWindow):
         self.scene = FlowScene(registry=self.registry)
         self.graphicsView.setScene(self.scene)
         self.graphicsView.setAcceptDrops(True)
+        
+        # ── 3.1 Yakınlaştırma ve Kaydırma filtresi ───────────────────
+        self.zoom_pan_filter = ZoomPanFilter(self.graphicsView, self)
+        self.graphicsView.viewport().installEventFilter(self.zoom_pan_filter)
 
         # ── 4. Yorumlayıcıyı oluştur ────────────────────────────────
         self.interpreter = Interpreter(registry=self.registry)
@@ -50,21 +56,37 @@ class FlowPyApp(QMainWindow):
         #   Interpreter highlight → düğüm vurgulama
         self.interpreter.highlight_node.connect(self._highlight_node)
         self.interpreter.clear_highlights.connect(self._clear_all_highlights)
+        
+        #   Debugger & Watcher sinyalleri
+        self.interpreter.scope_changed.connect(self._update_variable_watcher)
+        self.interpreter.flow_state_changed.connect(self._update_toolbar_state)
 
-        #   Menü: Çalıştır → Akışı Çalıştır (Ctrl+R)
+        #   Toolbar Aksiyonları
         self.actionRunFlow.triggered.connect(self.interpreter.run_flow)
+        self.actionStepFlow.triggered.connect(self.interpreter.step_flow)
+        self.actionStopFlow.triggered.connect(self.interpreter.stop_flow)
+
+        # ── 6.5 Undo / Redo Yönetimi ─────────────────────────────────
+        self.undo_manager = UndoManager(self.registry, self.scene)
+        self.scene.history_changed.connect(self.undo_manager.save_snapshot)
 
         #   Sahne seçim değişikliği → özellikler panelini güncelle
         self.scene.selectionChanged.connect(self._update_properties_panel)
 
-        # ── 7. Dosya menüsü aksiyonları ──────────────────────────────
+        # ── 7. Değişken tablosu başlangıç ayarları ───────────────────
+        self.variableTable.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.variableTable.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        
+        # Başlangıçta Buton Durumları
+        self._update_toolbar_state(is_active=False, is_paused=False)
+
+        # ── 8. Dosya menüsü aksiyonları ──────────────────────────────
         self._setup_file_menu()
 
-        # ── 8. Pencere başlığı & durum çubuğu ───────────────────────
+        # ── 9. Pencere başlığı & durum çubuğu ───────────────────────
         self.setWindowTitle("FlowPy — Görsel Algoritma Yorumlayıcı")
         self.statusbar.showMessage(
-            "Hazır — Düğümleri sürükleyin, çift tıklayarak özelleştirin, "
-            "Ctrl+R ile çalıştırın."
+            "Hazır — Düğümleri sürükleyin, çift tıklayarak özelleştirin."
         )
 
     # ── Liste Elemanları ─────────────────────────────────────────────
@@ -91,6 +113,20 @@ class FlowPyApp(QMainWindow):
         load_action.setShortcut("Ctrl+O")
         load_action.triggered.connect(self._load_flow)
         self.menuFile.addAction(load_action)
+        
+        self.menuFile.addSeparator()
+        
+        undo_action = QAction("↩️  Geri Al (Undo)", self)
+        undo_action.setShortcut("Ctrl+Z")
+        undo_action.triggered.connect(self.undo_manager.undo)
+        self.menuFile.addAction(undo_action)
+        self.addAction(undo_action) # Global shortcut
+
+        redo_action = QAction("↪️  İleri Al (Redo)", self)
+        redo_action.setShortcut("Ctrl+Y")
+        redo_action.triggered.connect(self.undo_manager.redo)
+        self.menuFile.addAction(redo_action)
+        self.addAction(redo_action) # Global shortcut
 
     def _save_flow(self):
         """Akışı JSON dosyasına kaydeder."""
@@ -167,11 +203,80 @@ class FlowPyApp(QMainWindow):
 
         self.propDetails.setHtml("<br>".join(lines))
 
+    # ── Debugger & Watcher UI ────────────────────────────────────────
+
+    def _update_variable_watcher(self, scope: dict):
+        """Çalışan ortamın (scope) değişkenlerini sağ tabloya yansıtır."""
+        self.variableTable.setRowCount(0) # Tabloyu temizle
+        
+        # Sadece built-in olmayan kendi tanımladığımız değerleri göster
+        custom_vars = {k: v for k, v in scope.items() if not k.startswith("__")}
+        
+        self.variableTable.setRowCount(len(custom_vars))
+        
+        for row, (key, value) in enumerate(custom_vars.items()):
+            key_item = QTableWidgetItem(str(key))
+            value_item = QTableWidgetItem(str(value))
+            
+            # Salt okunur yap
+            key_item.setFlags(key_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            value_item.setFlags(value_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            
+            self.variableTable.setItem(row, 0, key_item)
+            self.variableTable.setItem(row, 1, value_item)
+
+    def _update_toolbar_state(self, is_active: bool, is_paused: bool):
+        """Toolbar butonlarının Enable/Disable durumlarını ayarlar."""
+        if not is_active:
+            # Çalışmıyor (Boşta)
+            self.actionRunFlow.setEnabled(True)
+            self.actionStepFlow.setEnabled(True)
+            self.actionStopFlow.setEnabled(False)
+            self.actionRunFlow.setText("▶ Run All")
+            self.variableTable.setRowCount(0) # Tabloyu sıfırla
+        else:
+            if is_paused:
+                # Duraklatıldı (Step adımında)
+                self.actionRunFlow.setEnabled(True)
+                self.actionStepFlow.setEnabled(True)
+                self.actionStopFlow.setEnabled(True)
+                self.actionRunFlow.setText("▶ Continue")
+            else:
+                # Tam gaz çalışıyor (Pause butonu yapabiliriz ama şimdilik Step kapalı)
+                self.actionRunFlow.setEnabled(False)
+                self.actionStepFlow.setEnabled(False)
+                self.actionStopFlow.setEnabled(True)
+
+
+def setup_dark_theme(app: QApplication):
+    """QApplication için Qt'nin dâhili paletiyle modern koyu tema oluşturur."""
+    app.setStyle("Fusion")
+    palette = QPalette()
+    
+    dark_gray = QColor(45, 45, 45)
+    text_color = QColor(210, 210, 210)
+    
+    palette.setColor(QPalette.ColorRole.Window, dark_gray)
+    palette.setColor(QPalette.ColorRole.WindowText, text_color)
+    palette.setColor(QPalette.ColorRole.Base, QColor(25, 25, 25))
+    palette.setColor(QPalette.ColorRole.AlternateBase, dark_gray)
+    palette.setColor(QPalette.ColorRole.ToolTipBase, text_color)
+    palette.setColor(QPalette.ColorRole.ToolTipText, text_color)
+    palette.setColor(QPalette.ColorRole.Text, text_color)
+    palette.setColor(QPalette.ColorRole.Button, dark_gray)
+    palette.setColor(QPalette.ColorRole.ButtonText, text_color)
+    palette.setColor(QPalette.ColorRole.BrightText, Qt.GlobalColor.red)
+    palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
+    palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218))
+    palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.black)
+    
+    app.setPalette(palette)
 
 # ═══════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    setup_dark_theme(app)
     window = FlowPyApp()
     window.show()
     sys.exit(app.exec())
