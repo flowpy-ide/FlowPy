@@ -4,7 +4,7 @@
 # Port      : Düğümlerin giriş/çıkış bağlantı noktaları.
 # ──────────────────────────────────────────────────────────────────────
 
-from PyQt6.QtWidgets import QGraphicsItem, QGraphicsEllipseItem
+from PyQt6.QtWidgets import QGraphicsItem, QGraphicsEllipseItem, QGraphicsDropShadowEffect
 from PyQt6.QtCore import QRectF, Qt, QPointF
 from PyQt6.QtGui import (QPainter, QColor, QPen, QBrush, QFont,
                          QLinearGradient)
@@ -91,6 +91,11 @@ _DEFAULT_PROPERTIES = {
     "Process":  {"code": "", "description": ""},
     "Decision": {"condition": "", "description": ""},
     "While":    {"condition": "", "description": ""},
+    "Input":    {"variable": "USER_IN", "prompt": "Değer girin:"},
+    "Output":   {"expression": ""},
+    "For":      {"variable": "i", "start": "0", "end": "10", "step": "1"},
+    "Function": {"function_name": "my_func", "parameters": ""},
+    "Return":   {"expression": ""},
 }
 
 
@@ -108,6 +113,11 @@ class BaseNode(QGraphicsItem):
         "Process":  ("#2980b9", "#3498db"),   # Mavi
         "Decision": ("#8e44ad", "#9b59b6"),   # Mor
         "While":    ("#d35400", "#e67e22"),   # Turuncu
+        "For":      ("#d35400", "#e67e22"),   # Turuncu (Döngü)
+        "Input":    ("#16a085", "#1abc9c"),   # Teal
+        "Output":   ("#c0392b", "#e74c3c"),   # Kırmızı
+        "Function": ("#2c3e50", "#34495e"),   # Koyu mavi
+        "Return":   ("#7f8c8d", "#95a5a6"),   # Gri
     }
     DEFAULT_COLORS = ("#2c3e50", "#34495e")    # Koyu gri (bilinmeyen tipler)
 
@@ -138,6 +148,20 @@ class BaseNode(QGraphicsItem):
         # Çalıştırma sırasında vurgulama bayrağı
         self._highlight_active = False
 
+        # Görsel Glow Efekti (Çalıştırma sırasında)
+        self.glow_effect = QGraphicsDropShadowEffect()
+        self.glow_effect.setBlurRadius(25)
+        self.glow_effect.setColor(QColor("#f39c12")) # Turuncu glow
+        self.glow_effect.setOffset(0, 0)
+        self.glow_effect.setEnabled(False)
+        self.setGraphicsEffect(self.glow_effect)
+
+    def set_highlight(self, active: bool):
+        """Çalıştırılan düğümü görsel olarak parlatır (glow)."""
+        self._highlight_active = active
+        self.glow_effect.setEnabled(active)
+        self.update()
+
     # ── Port Yardımcıları ────────────────────────────────────────────
 
     def _create_ports(self):
@@ -160,8 +184,8 @@ class BaseNode(QGraphicsItem):
             out_false.setPos(self.WIDTH, self.HEIGHT * 0.7)
             self.output_ports.append(out_false)
 
-        elif self.title == "While":
-            # While: 1 giriş (sol), 2 çıkış (üst: 🔁 döngü gövdesi, alt: ➡ çıkış)
+        elif self.title in ("While", "For"):
+            # Döngü: 1 giriş (sol), 2 çıkış (üst: 🔁 döngü gövdesi, alt: ➡ çıkış)
             inp = Port(self, is_output=False)
             inp.setPos(0, self.HEIGHT / 2)
             self.input_ports.append(inp)
@@ -215,7 +239,8 @@ class BaseNode(QGraphicsItem):
 
         # ── Kenarlık ─────────────────────────────────────────────────
         if self._highlight_active:
-            painter.setPen(QPen(QColor("#f39c12"), 4))   # Çalıştırma vurgusu
+            # Glow effect zaten var, sadece çerçeveyi de belirginleştir
+            painter.setPen(QPen(QColor("#f1c40f"), 3))
         elif self.isSelected():
             painter.setPen(QPen(QColor("#f1c40f"), 3))   # Altın sarısı seçim
         else:
@@ -308,11 +333,22 @@ class BaseNode(QGraphicsItem):
         if self.scene() and hasattr(self.scene(), "history_changed"):
             self.scene().history_changed.emit()
 
-    # ── Konum Değişikliği → Edge Güncelleme ──────────────────────────
+    # ── Konum Değişikliği → Grid Snapping & Edge Güncelleme ──────────
 
     def itemChange(self, change, value):
-        """Düğüm sürüklendiğinde bağlı okları yeniden çizer."""
+        """Düğüm sürüklendiğinde ızgaraya hizalar ve bağlı okları günceller."""
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
+            # Grid Snapping (Izgaraya Hizalama)
+            grid_size = 20
+            new_pos = value
+            x = round(new_pos.x() / grid_size) * grid_size
+            y = round(new_pos.y() / grid_size) * grid_size
+            snapped_pos = QPointF(x, y)
+
+            # Edge'leri güncelle
             for edge in self.edges:
                 edge.update_path()
+                
+            return snapped_pos
+            
         return super().itemChange(change, value)

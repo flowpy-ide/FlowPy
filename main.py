@@ -53,8 +53,11 @@ class FlowPyApp(QMainWindow):
         #   Interpreter log → konsol
         self.interpreter.log_message.connect(self.consoleOutput.append)
 
-        #   Interpreter highlight → düğüm vurgulama
+        self._active_edges = []
+
+        #   Interpreter highlight → düğüm & kenar vurgulama
         self.interpreter.highlight_node.connect(self._highlight_node)
+        self.interpreter.highlight_edge.connect(self._highlight_edge)
         self.interpreter.clear_highlights.connect(self._clear_all_highlights)
         
         #   Debugger & Watcher sinyalleri
@@ -92,13 +95,15 @@ class FlowPyApp(QMainWindow):
     # ── Liste Elemanları ─────────────────────────────────────────────
 
     def _ensure_node_list_items(self):
-        """While düğümü listede yoksa ekler."""
+        """Eksik olan düğüm türlerini sol panele ekler."""
         existing = []
         for i in range(self.nodeListWidget.count()):
             existing.append(self.nodeListWidget.item(i).text())
 
-        if "While" not in existing:
-            self.nodeListWidget.addItem(QListWidgetItem("While"))
+        required_nodes = ["While", "Input", "Output", "For", "Function", "Return"]
+        for node_type in required_nodes:
+            if node_type not in existing:
+                self.nodeListWidget.addItem(QListWidgetItem(node_type))
 
     # ── Dosya Menüsü ─────────────────────────────────────────────────
 
@@ -154,24 +159,34 @@ class FlowPyApp(QMainWindow):
                 f"✔ Yüklendi: {nodes_count} düğüm, {edges_count} bağlantı ← {filepath}"
             )
 
-    # ── Düğüm Vurgulama (Çalıştırma Animasyonu) ─────────────────────
+    # ── Vurgulama (Çalıştırma Animasyonu) ─────────────────────
 
     def _highlight_node(self, node):
         """Çalıştırılan düğümü vurgular."""
-        # Önce tümünün vurgusunu kaldır
-        self._clear_all_highlights()
-        # Hedef düğümü vurgula
-        if hasattr(node, '_highlight_active'):
+        if hasattr(node, "set_highlight"):
+            node.set_highlight(True)
+        else:
             node._highlight_active = True
             node.update()
 
+    def _highlight_edge(self, edge):
+        """Çalıştırılan kenar bağlantısını sahnede yürütür (animasyon)."""
+        edge.set_animating(True)
+        self._active_edges.append(edge)
+
     def _clear_all_highlights(self):
-        """Tüm düğümlerin çalıştırma vurgusunu kaldırır."""
+        """Tüm düğüm ve kenarların üzerindeki çalıştırma vurgusunu temizler."""
         for item in self.scene.items():
             if isinstance(item, BaseNode):
-                if item._highlight_active:
+                if hasattr(item, "set_highlight"):
+                    item.set_highlight(False)
+                elif item._highlight_active:
                     item._highlight_active = False
                     item.update()
+                    
+        for edge in self._active_edges:
+            edge.set_animating(False)
+        self._active_edges.clear()
 
     # ── Özellikler Paneli Güncelleme ─────────────────────────────────
 

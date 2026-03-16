@@ -45,6 +45,16 @@ class NodeEditorDialog(QDialog):
             self._add_process_fields(form_layout)
         elif self.node_type == "Start":
             self._add_start_fields(form_layout)
+        elif self.node_type == "Input":
+            self._add_input_fields(form_layout)
+        elif self.node_type == "Output":
+            self._add_output_fields(form_layout)
+        elif self.node_type == "For":
+            self._add_for_fields(form_layout)
+        elif self.node_type == "Function":
+            self._add_function_fields(form_layout)
+        elif self.node_type == "Return":
+            self._add_return_fields(form_layout)
         else:
             self._add_generic_fields(form_layout)
 
@@ -126,8 +136,72 @@ class NodeEditorDialog(QDialog):
         form.addRow("Başlangıç Değişkenleri:", vars_edit)
         self._inputs["variables"] = vars_edit
 
-    # ── Genel Alanlar ────────────────────────────────────────────────
+    # ── Input Alanları ───────────────────────────────────────────────
+    def _add_input_fields(self, form: QFormLayout):
+        var_edit = QLineEdit()
+        var_edit.setPlaceholderText("Değişken Adı (ör: name)")
+        var_edit.setText(self.node.properties.get("variable", "USER_IN"))
+        form.addRow("Değişken:", var_edit)
+        self._inputs["variable"] = var_edit
 
+        prompt_edit = QLineEdit()
+        prompt_edit.setPlaceholderText("Kullanıcıya sorulacak soru")
+        prompt_edit.setText(self.node.properties.get("prompt", "Değer girin:"))
+        form.addRow("Soru (Prompt):", prompt_edit)
+        self._inputs["prompt"] = prompt_edit
+
+    # ── Output Alanları ──────────────────────────────────────────────
+    def _add_output_fields(self, form: QFormLayout):
+        expr_edit = QLineEdit()
+        expr_edit.setPlaceholderText("Örnek: 'Merhaba ' + name")
+        expr_edit.setText(self.node.properties.get("expression", ""))
+        form.addRow("Çıktı İfadesi:", expr_edit)
+        self._inputs["expression"] = expr_edit
+
+    # ── For Loop Alanları ────────────────────────────────────────────
+    def _add_for_fields(self, form: QFormLayout):
+        var_edit = QLineEdit()
+        var_edit.setText(self.node.properties.get("variable", "i"))
+        form.addRow("Sayaç Değişkeni:", var_edit)
+        self._inputs["variable"] = var_edit
+
+        start_edit = QLineEdit()
+        start_edit.setText(self.node.properties.get("start", "0"))
+        form.addRow("Başlangıç:", start_edit)
+        self._inputs["start"] = start_edit
+
+        end_edit = QLineEdit()
+        end_edit.setText(self.node.properties.get("end", "10"))
+        form.addRow("Bitiş (Dahil Değil):", end_edit)
+        self._inputs["end"] = end_edit
+
+        step_edit = QLineEdit()
+        step_edit.setText(self.node.properties.get("step", "1"))
+        form.addRow("Artış (Step):", step_edit)
+        self._inputs["step"] = step_edit
+
+    # ── Function Alanları ────────────────────────────────────────────
+    def _add_function_fields(self, form: QFormLayout):
+        func_edit = QLineEdit()
+        func_edit.setText(self.node.properties.get("function_name", "my_func"))
+        form.addRow("Fonksiyon Adı:", func_edit)
+        self._inputs["function_name"] = func_edit
+
+        params_edit = QLineEdit()
+        params_edit.setPlaceholderText("virgülle ayırın, ör: x, y")
+        params_edit.setText(self.node.properties.get("parameters", ""))
+        form.addRow("Parametreler:", params_edit)
+        self._inputs["parameters"] = params_edit
+
+    # ── Return Alanları ──────────────────────────────────────────────
+    def _add_return_fields(self, form: QFormLayout):
+        expr_edit = QLineEdit()
+        expr_edit.setPlaceholderText("Geri döndürülecek ifade (ör: x + 10)")
+        expr_edit.setText(self.node.properties.get("expression", ""))
+        form.addRow("Dönüş İfadesi:", expr_edit)
+        self._inputs["expression"] = expr_edit
+
+    # ── Genel Alanlar ────────────────────────────────────────────────
     def _add_generic_fields(self, form: QFormLayout):
         desc_edit = QLineEdit()
         desc_edit.setText(self.node.properties.get("description", ""))
