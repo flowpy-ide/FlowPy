@@ -1,0 +1,95 @@
+{
+  "nodes": [
+    {
+      "id": "4a2629d3-0b40-4125-a432-2164ec4f162c",
+      "title": "Start",
+      "x": -320.0,
+      "y": -220.0,
+      "properties": {
+        "variables": ""
+      }
+    },
+    {
+      "id": "96624fa3-e3c5-49e1-9046-f43739fc1169",
+      "title": "Process",
+      "x": -40.0,
+      "y": -220.0,
+      "properties": {
+        "code": "result = x*x",
+        "description": ""
+      }
+    },
+    {
+      "id": "abf3aa9e-6c83-476c-af74-97d06da6fe9e",
+      "title": "Input",
+      "x": -220.0,
+      "y": 0.0,
+      "properties": {
+        "variable": "x",
+        "prompt": "Değer girin:"
+      }
+    },
+    {
+      "id": "f34acbf4-1c09-4f54-b050-4f97c8632d8d",
+      "title": "Decision",
+      "x": 60.0,
+      "y": 60.0,
+      "properties": {
+        "condition": "x>5",
+        "description": ""
+      }
+    },
+    {
+      "id": "a976bac3-2996-4631-af42-57fc137792bb",
+      "title": "Process",
+      "x": 260.0,
+      "y": -140.0,
+      "properties": {
+        "code": "print(\"Girilen değer 5'ten büyüktür\")",
+        "description": ""
+      }
+    },
+    {
+      "id": "f8ff56f8-94e9-4f16-b00e-181a9b009167",
+      "title": "Process",
+      "x": 260.0,
+      "y": 40.0,
+      "properties": {
+        "code": "print(\"Girilen değer küçüktür daha büyük değer gir.\")",
+        "description": ""
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source_id": "4a2629d3-0b40-4125-a432-2164ec4f162c",
+      "dest_id": "abf3aa9e-6c83-476c-af74-97d06da6fe9e",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "abf3aa9e-6c83-476c-af74-97d06da6fe9e",
+      "dest_id": "96624fa3-e3c5-49e1-9046-f43739fc1169",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "96624fa3-e3c5-49e1-9046-f43739fc1169",
+      "dest_id": "f34acbf4-1c09-4f54-b050-4f97c8632d8d",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "f34acbf4-1c09-4f54-b050-4f97c8632d8d",
+      "dest_id": "a976bac3-2996-4631-af42-57fc137792bb",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "f34acbf4-1c09-4f54-b050-4f97c8632d8d",
+      "dest_id": "f8ff56f8-94e9-4f16-b00e-181a9b009167",
+      "source_port_index": 1,
+      "dest_port_index": 0
+    }
+  ]
+}

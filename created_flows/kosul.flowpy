@@ -1,0 +1,95 @@
+{
+  "nodes": [
+    {
+      "id": "d43bb1a4-28e6-44cd-845e-3db0653f15c6",
+      "title": "Start",
+      "x": -540.0,
+      "y": -400.0,
+      "properties": {
+        "variables": ""
+      }
+    },
+    {
+      "id": "1e1db653-37a5-4440-96cd-944ae89e893a",
+      "title": "Input",
+      "x": -380.0,
+      "y": -500.0,
+      "properties": {
+        "variable": "x",
+        "prompt": "Bir sayı girin: "
+      }
+    },
+    {
+      "id": "38bb551f-9838-4439-a887-d47b2129b00e",
+      "title": "Process",
+      "x": -160.0,
+      "y": -440.0,
+      "properties": {
+        "code": "result = x*5",
+        "description": ""
+      }
+    },
+    {
+      "id": "e6cfea58-9755-4c41-b75e-d36dd047daa2",
+      "title": "Decision",
+      "x": -320.0,
+      "y": -280.0,
+      "properties": {
+        "condition": "result>5",
+        "description": ""
+      }
+    },
+    {
+      "id": "82f49f98-834a-431e-80a3-3da28244099d",
+      "title": "Process",
+      "x": -40.0,
+      "y": -280.0,
+      "properties": {
+        "code": "print(\"Kosul dogru\")",
+        "description": ""
+      }
+    },
+    {
+      "id": "3c7c15e5-c7c1-4bf9-a231-56065c57457b",
+      "title": "Process",
+      "x": -40.0,
+      "y": -120.0,
+      "properties": {
+        "code": "print(\"hata\")",
+        "description": ""
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source_id": "d43bb1a4-28e6-44cd-845e-3db0653f15c6",
+      "dest_id": "1e1db653-37a5-4440-96cd-944ae89e893a",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "1e1db653-37a5-4440-96cd-944ae89e893a",
+      "dest_id": "38bb551f-9838-4439-a887-d47b2129b00e",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "38bb551f-9838-4439-a887-d47b2129b00e",
+      "dest_id": "e6cfea58-9755-4c41-b75e-d36dd047daa2",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "e6cfea58-9755-4c41-b75e-d36dd047daa2",
+      "dest_id": "82f49f98-834a-431e-80a3-3da28244099d",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "e6cfea58-9755-4c41-b75e-d36dd047daa2",
+      "dest_id": "3c7c15e5-c7c1-4bf9-a231-56065c57457b",
+      "source_port_index": 1,
+      "dest_port_index": 0
+    }
+  ]
+}
