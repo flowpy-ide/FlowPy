@@ -202,6 +202,83 @@
                 </layout>
             </widget>
         </widget>
+        <!-- ═══ Kod Üretici Dock (Live Generation) ═══ -->
+        <widget class="QDockWidget" name="codeGenDock">
+            <property name="windowTitle">
+                <string>Kod Üretici (Canlı)</string>
+            </property>
+            <attribute name="dockWidgetArea">
+                <number>2</number>
+            </attribute>
+            <widget class="QWidget" name="codeGenDockContents">
+                <layout class="QVBoxLayout" name="codeGenLayout">
+                    <item>
+                        <layout class="QHBoxLayout" name="codeGenToolbarLayout">
+                            <item>
+                                <widget class="QComboBox" name="codeGenLangCombo">
+                                    <item>
+                                        <property name="text">
+                                            <string>Pseudocode</string>
+                                        </property>
+                                    </item>
+                                    <item>
+                                        <property name="text">
+                                            <string>Python</string>
+                                        </property>
+                                    </item>
+                                    <item>
+                                        <property name="text">
+                                            <string>C</string>
+                                        </property>
+                                    </item>
+                                    <item>
+                                        <property name="text">
+                                            <string>Java</string>
+                                        </property>
+                                    </item>
+                                </widget>
+                            </item>
+                            <item>
+                                <widget class="QPushButton" name="codeGenCopyBtn">
+                                    <property name="text">
+                                        <string>Kopyala</string>
+                                    </property>
+                                    <property name="toolTip">
+                                        <string>Kodu panoya kopyala</string>
+                                    </property>
+                                </widget>
+                            </item>
+                            <item>
+                                <widget class="QPushButton" name="codeGenSaveBtn">
+                                    <property name="text">
+                                        <string>Dışa Aktar</string>
+                                    </property>
+                                    <property name="toolTip">
+                                        <string>Kodu dosyaya kaydet</string>
+                                    </property>
+                                </widget>
+                            </item>
+                        </layout>
+                    </item>
+                    <item>
+                        <widget class="QTextBrowser" name="codeGenOutput">
+                            <property name="font">
+                                <font>
+                                    <family>Consolas</family>
+                                    <pointsize>10</pointsize>
+                                </font>
+                            </property>
+                            <property name="readOnly">
+                                <bool>true</bool>
+                            </property>
+                            <property name="placeholderText">
+                                <string>Canlı kod çıktısı burada görüntülenecek...</string>
+                            </property>
+                        </widget>
+                    </item>
+                </layout>
+            </widget>
+        </widget>
         <action name="actionRunFlow">
             <property name="text">
                 <string>▶ Run All</string>

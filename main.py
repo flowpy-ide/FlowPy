@@ -17,6 +17,8 @@ from core.registry import NodeRegistry
 from core.interpreter import Interpreter
 from core.serializer import FlowSerializer
 from core.undo import UndoManager
+from core.generator import CodeGenerator
+from core.syntax_highlighter import CodeHighlighter
 from views.canvas import FlowScene, ZoomPanFilter
 from models.node import BaseNode
 
@@ -82,6 +84,18 @@ class FlowPyApp(QMainWindow):
         
         # Başlangıçta Buton Durumları
         self._update_toolbar_state(is_active=False, is_paused=False)
+
+        # ── 7.5 Code Generator Bağlantıları ──────────────────────────
+        self.code_generator = CodeGenerator(self.registry)
+        self.code_highlighter = CodeHighlighter(self.codeGenOutput.document())
+        self.scene.history_changed.connect(self._update_live_generation)
+        self.codeGenLangCombo.currentIndexChanged.connect(self._update_live_generation)
+        
+        # Buton bağlantıları
+        self.codeGenCopyBtn.clicked.connect(self._copy_generated_code)
+        self.codeGenSaveBtn.clicked.connect(self._export_generated_code)
+        
+        self._update_live_generation() # İlk açılışta boş/start renderı için
 
         # ── 8. Dosya menüsü aksiyonları ──────────────────────────────
         self._setup_file_menu()
@@ -192,7 +206,12 @@ class FlowPyApp(QMainWindow):
 
     def _update_properties_panel(self):
         """Seçili düğümün özelliklerini sağ panele yazar."""
-        selected = self.scene.selectedItems()
+        try:
+            selected = self.scene.selectedItems()
+        except RuntimeError:
+            # Uygulama kapanırken scene silinmiş olabilir
+            return
+
         nodes = [item for item in selected if isinstance(item, BaseNode)]
 
         if not nodes:
@@ -261,6 +280,54 @@ class FlowPyApp(QMainWindow):
                 self.actionRunFlow.setEnabled(False)
                 self.actionStepFlow.setEnabled(False)
                 self.actionStopFlow.setEnabled(True)
+
+    # ── Live Generation ──────────────────────────────────────────────
+
+    def _update_live_generation(self):
+        """Graph değiştiğinde veya dil değiştirildiğinde kod panelini yeniler."""
+        lang = self.codeGenLangCombo.currentText()
+        if not lang:
+            return
+            
+        generated_code = self.code_generator.generate(lang)
+        self.codeGenOutput.setPlainText(generated_code)
+
+    def _copy_generated_code(self):
+        """Üretilen kodu işletim sistemi panosuna (clipboard) kopyalar."""
+        text = self.codeGenOutput.toPlainText()
+        if text:
+            clipboard = QApplication.clipboard()
+            clipboard.setText(text)
+            self.statusbar.showMessage("✔ Kod panoya kopyalandı.", 3000)
+            
+    def _export_generated_code(self):
+        """Üretilen kodu seçili dile uygun uzantıyla dışa aktarır."""
+        text = self.codeGenOutput.toPlainText()
+        if not text:
+            self.statusbar.showMessage("⚠ Dışa aktarılacak kod bulunamadı.", 3000)
+            return
+            
+        lang = self.codeGenLangCombo.currentText().lower()
+        ext_map = {
+            "python": ("Python (*.py)", ".py"),
+            "c": ("C Source (*.c)", ".c"),
+            "java": ("Java Source (*.java)", ".java"),
+            "pseudocode": ("Text File (*.txt)", ".txt")
+        }
+        
+        filter_str, default_ext = ext_map.get(lang, ("Text File (*.txt)", ".txt"))
+        
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, f"Kodu {lang.capitalize()} Olarak Dışa Aktar", f"flow_export{default_ext}", filter_str
+        )
+        
+        if filepath:
+            try:
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(text)
+                self.statusbar.showMessage(f"✔ Kod başarıyla dışa aktarıldı: {filepath}", 4000)
+            except Exception as e:
+                self.statusbar.showMessage(f"❌ Dışa aktarma hatası: {e}", 4000)
 
 
 def setup_dark_theme(app: QApplication):

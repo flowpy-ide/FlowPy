@@ -3,18 +3,18 @@
     {
       "id": "ed0f9d59-14b2-4ae4-919a-0f6d381f6ca3",
       "title": "Decision",
-      "x": 68.0,
-      "y": -72.0,
+      "x": -180.0,
+      "y": -60.0,
       "properties": {
-        "condition": "if name",
+        "condition": "name",
         "description": ""
       }
     },
     {
       "id": "93f552e2-7c82-4fa8-a0ef-2b9c5e065f85",
       "title": "Process",
-      "x": 42.0,
-      "y": 48.0,
+      "x": 40.0,
+      "y": 40.0,
       "properties": {
         "code": "print(name)",
         "description": ""
@@ -23,8 +23,8 @@
     {
       "id": "bca36b71-e2e2-45f1-a950-87c491e98e31",
       "title": "Start",
-      "x": -210.0,
-      "y": -212.0,
+      "x": -200.0,
+      "y": -220.0,
       "properties": {
         "variables": "name = \"Erkan\""
       }
