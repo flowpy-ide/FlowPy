@@ -87,14 +87,15 @@ class Edge(QGraphicsPathItem):
         pen = QPen(QColor("#2980b9"), 2.5)
 
         if self._is_animating:
-            pen.setColor(QColor("#f39c12"))  # Vurgu turuncusu
+            pen.setColor(QColor("#3498db"))  # Animasyon mavisi
             pen.setWidth(4)
             pen.setStyle(Qt.PenStyle.DashLine)
             pen.setDashOffset(self._dash_offset)
         elif self.isSelected():
             pen.setColor(QColor("#f1c40f"))  # Seçim sarısı
-            pen.setWidth(3.5)
-
+            pen.setWidth(4)
+        else:
+            pen.setWidth(3)
         painter.setPen(pen)
         painter.drawPath(self.path())
 

@@ -2,18 +2,113 @@
 # ──────────────────────────────────────────────────────────────────────
 # FlowScene : QGraphicsScene alt sınıfı — sürükle-bırak ile
 #              düğüm oluşturma, port bağlantıları ve NodeRegistry.
+# HorizontalRuler / VerticalRuler: canvas kenar cetvelleri.
 # ──────────────────────────────────────────────────────────────────────
 
-from PyQt6.QtWidgets import QGraphicsScene, QGraphicsPathItem
-from PyQt6.QtCore import Qt, QByteArray, QDataStream, QIODevice, QPointF, QObject, QEvent, pyqtSignal
-from PyQt6.QtGui import QPen, QColor, QPainterPath, QBrush, QPainter
+from PyQt6.QtWidgets import QGraphicsScene, QGraphicsPathItem, QWidget
+from PyQt6.QtCore import Qt, QByteArray, QDataStream, QIODevice, QPointF, QObject, QEvent, pyqtSignal, QRectF
+from PyQt6.QtGui import QPen, QColor, QPainterPath, QBrush, QPainter, QFont
 
 from models.node import BaseNode, Port
 from models.edge import Edge
 from core.registry import NodeRegistry
 
-# QListWidget'in kullandığı varsayılan sürükleme formatı
+# QListWidget / QTreeWidget'in kullandığı varsayılan sürükleme formatı
 _LIST_MIME = "application/x-qabstractitemmodeldatalist"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Cetvel Widgetları
+# ═══════════════════════════════════════════════════════════════════════
+
+class HorizontalRuler(QWidget):
+    """Canvas'ın üst kenarında piksel cetveli çizer (yatay)."""
+
+    HEIGHT = 22
+    TICK_INTERVAL = 100   # her kaç px'de bir büyük işaret
+
+    def __init__(self, view, parent=None):
+        super().__init__(parent or view.parent())
+        self.view = view
+        self.setFixedHeight(self.HEIGHT)
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor("#252525"))
+
+        pen = QPen(QColor("#555"), 1)
+        painter.setPen(pen)
+        # Cetvel alt çizgisi
+        painter.drawLine(0, self.HEIGHT - 1, self.width(), self.HEIGHT - 1)
+
+        font = QFont("Segoe UI", 7)
+        painter.setFont(font)
+        painter.setPen(QColor("#888"))
+
+        # Görünür sahne aralığını hesapla
+        view = self.view
+        left_scene = view.mapToScene(0, 0).x()
+        right_scene = view.mapToScene(self.width(), 0).x()
+
+        step = self.TICK_INTERVAL
+        start = int(left_scene // step) * step
+
+        for scene_x in range(start, int(right_scene) + step, step):
+            vp_x = int(view.mapFromScene(QPointF(scene_x, 0)).x())
+            if 0 <= vp_x <= self.width():
+                painter.setPen(QPen(QColor("#666"), 1))
+                painter.drawLine(vp_x, self.HEIGHT - 8, vp_x, self.HEIGHT - 1)
+                painter.setPen(QColor("#888"))
+                painter.drawText(vp_x + 2, self.HEIGHT - 8, str(scene_x))
+
+        painter.end()
+
+
+class VerticalRuler(QWidget):
+    """Canvas'ın sol kenarında piksel cetveli çizer (dikey)."""
+
+    WIDTH = 22
+    TICK_INTERVAL = 100
+
+    def __init__(self, view, parent=None):
+        super().__init__(parent or view.parent())
+        self.view = view
+        self.setFixedWidth(self.WIDTH)
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor("#252525"))
+
+        painter.setPen(QPen(QColor("#555"), 1))
+        # Cetvel sağ çizgisi
+        painter.drawLine(self.WIDTH - 1, 0, self.WIDTH - 1, self.height())
+
+        font = QFont("Segoe UI", 7)
+        painter.setFont(font)
+        painter.setPen(QColor("#888"))
+
+        view = self.view
+        top_scene = view.mapToScene(0, 0).y()
+        bot_scene = view.mapToScene(0, self.height()).y()
+
+        step = self.TICK_INTERVAL
+        start = int(top_scene // step) * step
+
+        for scene_y in range(start, int(bot_scene) + step, step):
+            vp_y = int(view.mapFromScene(QPointF(0, scene_y)).y())
+            if 0 <= vp_y <= self.height():
+                painter.setPen(QPen(QColor("#666"), 1))
+                painter.drawLine(self.WIDTH - 8, vp_y, self.WIDTH - 1, vp_y)
+                painter.setPen(QColor("#888"))
+                painter.save()
+                painter.translate(self.WIDTH - 10, vp_y - 2)
+                painter.rotate(-90)
+                painter.drawText(0, 0, str(scene_y))
+                painter.restore()
+
+        painter.end()
 
 
 class ZoomPanFilter(QObject):
@@ -235,24 +330,37 @@ class FlowScene(QGraphicsScene):
 
     @staticmethod
     def _extract_text(mime_data) -> str:
-        """Mime verisinden düğüm adını çıkarır."""
+        """Mime verisinden düğüm adını çıkarır.
+        
+        QTreeWidget'tan gelen sürüklemede UserRole (temiz isim) tercih edilir.
+        QListWidget'tan gelen sürüklemede DisplayRole kullanılır.
+        """
         if mime_data.hasText():
             return mime_data.text().strip()
 
         if mime_data.hasFormat(_LIST_MIME):
             data = mime_data.data(_LIST_MIME)
             stream = QDataStream(data, QIODevice.OpenModeFlag.ReadOnly)
+            user_role_text = ""
+            display_text = ""
             while not stream.atEnd():
-                row = stream.readInt32()
-                col = stream.readInt32()
+                row = stream.readInt32()   # noqa: F841
+                col = stream.readInt32()   # noqa: F841
                 map_items = stream.readInt32()
                 for _ in range(map_items):
                     role = stream.readInt32()
                     value = stream.readQVariant()
-                    if role == Qt.ItemDataRole.DisplayRole:
-                        text = str(value).strip()
-                        if text:
-                            return text
+                    if role == Qt.ItemDataRole.UserRole:
+                        t = str(value).strip()
+                        if t and t != "None":
+                            user_role_text = t
+                    elif role == Qt.ItemDataRole.DisplayRole:
+                        t = str(value).strip()
+                        if t:
+                            # Strip leading whitespace + icon prefix (e.g. "  ▶  Start" → "Start")
+                            parts = t.rsplit(None, 1)
+                            display_text = parts[-1] if parts else t
+            return user_role_text or display_text
         return ""
 
     def dragEnterEvent(self, event):

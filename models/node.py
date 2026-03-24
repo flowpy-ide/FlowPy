@@ -148,6 +148,13 @@ class BaseNode(QGraphicsItem):
         # Çalıştırma sırasında vurgulama bayrağı
         self._highlight_active = False
 
+        # ── Özel stil özellikleri (Style Customizer) ─────────────────
+        self._custom_color: str | None = None        # hex renk veya None (varsayılan)
+        self._custom_border_style: int = 0           # 0=solid,1=dash,2=dot,3=none
+        self._border_pen_style = None                # Qt.PenStyle (None = auto)
+        self._custom_line_style: int = 0
+        self._line_pen_style = None
+
         # Görsel Glow Efekti (Çalıştırma sırasında)
         self.glow_effect = QGraphicsDropShadowEffect()
         self.glow_effect.setBlurRadius(25)
@@ -228,23 +235,35 @@ class BaseNode(QGraphicsItem):
         """Düğümün görsel çizimi — gradient, yuvarlak köşeler, başlık + özellik."""
         rect = self.boundingRect()
 
-        # Renk paletini seç
-        dark, light = self.COLOR_MAP.get(self.title, self.DEFAULT_COLORS)
+        # Renk paletini seç — özel renk varsa onu kullan
+        if self._custom_color:
+            base = QColor(self._custom_color)
+            dark_c = base.darker(140)
+            light_c = base
+        else:
+            dark, light = self.COLOR_MAP.get(self.title, self.DEFAULT_COLORS)
+            dark_c = QColor(dark)
+            light_c = QColor(light)
 
         # ── Gradient arka plan ────────────────────────────────────────
         gradient = QLinearGradient(0, 0, 0, self.HEIGHT)
-        gradient.setColorAt(0, QColor(light))
-        gradient.setColorAt(1, QColor(dark))
+        gradient.setColorAt(0, light_c)
+        gradient.setColorAt(1, dark_c)
         painter.setBrush(QBrush(gradient))
 
         # ── Kenarlık ─────────────────────────────────────────────────
         if self._highlight_active:
-            # Glow effect zaten var, sadece çerçeveyi de belirginleştir
             painter.setPen(QPen(QColor("#f1c40f"), 3))
         elif self.isSelected():
             painter.setPen(QPen(QColor("#f1c40f"), 3))   # Altın sarısı seçim
         else:
-            painter.setPen(QPen(QColor("#2c3e50"), 1.5))
+            border_style = (self._border_pen_style
+                            if self._border_pen_style is not None
+                            else Qt.PenStyle.SolidLine)
+            if border_style == Qt.PenStyle.NoPen:
+                painter.setPen(Qt.PenStyle.NoPen)
+            else:
+                painter.setPen(QPen(QColor("#2c3e50"), 1.5, border_style))
 
         painter.drawRoundedRect(rect, self.CORNER_RADIUS, self.CORNER_RADIUS)
 
