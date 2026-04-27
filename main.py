@@ -76,8 +76,12 @@ class FlowPyApp(QMainWindow):
         self.registry = NodeRegistry()
 
         # ── 3. Sahneyi oluştur ve graphicsView'a bağla ──────────────
-        self.scene = FlowScene(registry=self.registry)
-        self.graphicsView.setScene(self.scene)
+        self.scenes = {
+            "page1": FlowScene(registry=self.registry),
+            "page2": FlowScene(registry=self.registry)
+        }
+        self.current_scene = self.scenes["page1"]
+        self.graphicsView.setScene(self.current_scene)
         self.graphicsView.setAcceptDrops(True)
 
         # ── 3.1 Yakınlaştırma ve Kaydırma filtresi ───────────────────
@@ -108,10 +112,8 @@ class FlowPyApp(QMainWindow):
         self.actionStopFlow.triggered.connect(self.interpreter.stop_flow)
 
         # ── 6.5 Undo / Redo ─────────────────────────────────────────
-        self.undo_manager = UndoManager(self.registry, self.scene)
-        self.scene.history_changed.connect(self.undo_manager.save_snapshot)
-        self.scene.selectionChanged.connect(self._update_properties_panel)
-        self.scene.selectionChanged.connect(self._update_style_panel)
+        self.undo_manager = UndoManager(self.registry, self.current_scene)
+        self._connect_scene_signals(self.current_scene)
 
         # ── 7. Değişken tablosu ──────────────────────────────────────
         self.variableTable.horizontalHeader().setSectionResizeMode(
@@ -123,7 +125,7 @@ class FlowPyApp(QMainWindow):
         # ── 7.5 Code Generator ────────────────────────────────────────
         self.code_generator = CodeGenerator(self.registry)
         self.code_highlighter = CodeHighlighter(self.codeGenOutput.document())
-        self.scene.history_changed.connect(self._update_live_generation)
+        self.current_scene.history_changed.connect(self._update_live_generation)
         self.codeGenLangCombo.currentIndexChanged.connect(self._update_live_generation)
         self.codeGenCopyBtn.clicked.connect(self._copy_generated_code)
         self.codeGenSaveBtn.clicked.connect(self._export_generated_code)
@@ -156,6 +158,28 @@ class FlowPyApp(QMainWindow):
         self.statusbar.showMessage(
             "Ready — Drag nodes to canvas, double-click to edit."
         )
+
+    def _connect_scene_signals(self, scene):
+        """Sahne değiştikçe sinyalleri yeni sahneye bağlar."""
+        try: scene.history_changed.disconnect()
+        except: pass
+        try: scene.selectionChanged.disconnect()
+        except: pass
+
+        scene.history_changed.connect(self.undo_manager.save_snapshot)
+        scene.history_changed.connect(self._update_live_generation)
+        scene.selectionChanged.connect(self._update_properties_panel)
+        scene.selectionChanged.connect(self._update_style_panel)
+
+    def _switch_page(self, page_key: str):
+        """Sayfa butonlarına basıldığında sahneyi değiştirir."""
+        self.current_scene = self.scenes[page_key]
+        self.graphicsView.setScene(self.current_scene)
+        self.undo_manager.scene = self.current_scene
+        self._connect_scene_signals(self.current_scene)
+        self._update_properties_panel()
+        self._update_style_panel()
+        self.statusbar.showMessage(f"Switched to {page_key.capitalize()}.")
 
     # ── Cetvel Kurulumu ──────────────────────────────────────────────
 
@@ -288,7 +312,7 @@ class FlowPyApp(QMainWindow):
     def _update_style_panel(self):
         """Seçili düğüme göre style panelini günceller."""
         try:
-            selected = self.scene.selectedItems()
+            selected = self.current_scene.selectedItems()
         except RuntimeError:
             return
 
@@ -326,7 +350,7 @@ class FlowPyApp(QMainWindow):
     def _on_opacity_changed(self, value: int):
         """Seçili düğümlerin opaklığını günceller."""
         self.opacityValueLabel.setText(str(value))
-        for item in self.scene.selectedItems():
+        for item in self.current_scene.selectedItems():
             if isinstance(item, BaseNode):
                 item.setOpacity(value / 100.0)
 
@@ -340,7 +364,7 @@ class FlowPyApp(QMainWindow):
             3: Qt.PenStyle.NoPen,
         }
         style = style_map.get(index, Qt.PenStyle.SolidLine)
-        for item in self.scene.selectedItems():
+        for item in self.current_scene.selectedItems():
             if isinstance(item, BaseNode):
                 item._custom_border_style = index
                 item._border_pen_style = style
@@ -354,7 +378,7 @@ class FlowPyApp(QMainWindow):
             2: Qt.PenStyle.DotLine,
         }
         style = style_map.get(index, Qt.PenStyle.SolidLine)
-        for item in self.scene.selectedItems():
+        for item in self.current_scene.selectedItems():
             if isinstance(item, BaseNode):
                 item._custom_line_style = index
                 item._line_pen_style = style
@@ -362,7 +386,7 @@ class FlowPyApp(QMainWindow):
 
     def _apply_node_color(self, hex_color: str):
         """Seçili düğümlere renk uygular."""
-        for item in self.scene.selectedItems():
+        for item in self.current_scene.selectedItems():
             if isinstance(item, BaseNode):
                 item._custom_color = hex_color
                 item.update()
@@ -379,6 +403,9 @@ class FlowPyApp(QMainWindow):
         self.panModeBtn.toggled.connect(self._toggle_pan_mode)
 
         # Page tabs (tek sahne, simüle edilmiş sekmeler)
+        self.pageTab1Btn.clicked.connect(lambda: self._switch_page("page1"))
+        self.pageTab2Btn.clicked.connect(lambda: self._switch_page("page2"))
+
         page_group = QButtonGroup(self)
         page_group.addButton(self.pageTab1Btn)
         page_group.addButton(self.pageTab2Btn)
@@ -538,7 +565,7 @@ class FlowPyApp(QMainWindow):
         )
         if filepath:
             nodes_count, edges_count = FlowSerializer.save_to_file(
-                filepath, self.registry, self.scene
+                filepath, self.registry, self.current_scene
             )
             self.statusbar.showMessage(
                 f"✔ Saved: {nodes_count} nodes, {edges_count} edges → {filepath}"
@@ -550,7 +577,7 @@ class FlowPyApp(QMainWindow):
         )
         if filepath:
             nodes_count, edges_count = FlowSerializer.load_from_file(
-                filepath, self.registry, self.scene
+                filepath, self.registry, self.current_scene
             )
             self.statusbar.showMessage(
                 f"✔ Loaded: {nodes_count} nodes, {edges_count} edges ← {filepath}"
@@ -570,7 +597,7 @@ class FlowPyApp(QMainWindow):
         self._active_edges.append(edge)
 
     def _clear_all_highlights(self):
-        for item in self.scene.items():
+        for item in self.current_scene.items():
             if isinstance(item, BaseNode):
                 if hasattr(item, "set_highlight"):
                     item.set_highlight(False)
@@ -585,7 +612,7 @@ class FlowPyApp(QMainWindow):
 
     def _update_properties_panel(self):
         try:
-            selected = self.scene.selectedItems()
+            selected = self.current_scene.selectedItems()
         except RuntimeError:
             return
 
