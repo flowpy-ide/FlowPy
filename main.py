@@ -6,12 +6,13 @@
 
 import sys
 import os
+import ctypes
 
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QFileDialog,
                               QTreeWidgetItem, QTableWidgetItem, QHeaderView,
                               QButtonGroup)
 from PyQt6 import uic
-from PyQt6.QtGui import QAction, QPalette, QColor
+from PyQt6.QtGui import QAction, QIcon, QPalette, QColor
 from PyQt6.QtCore import Qt
 
 from core.registry import NodeRegistry
@@ -23,12 +24,15 @@ from core.syntax_highlighter import CodeHighlighter
 from views.canvas import FlowScene, ZoomPanFilter, HorizontalRuler, VerticalRuler
 from models.node import BaseNode
 
+BASE_DIR = os.path.dirname(__file__)
+APP_ICON_PATH = os.path.join(BASE_DIR, "docs", "icon-svg.svg")
+
 
 # ── Düğüm Kategori Tanımları ─────────────────────────────────────────
 NODE_CATEGORIES = {
     "Basic": [
-        ("▶", "Start"),
-        ("□", "Process"),
+        ("▶️", "Start"),
+        ("⏹️", "Process"),
         ("◇", "Decision"),
     ],
     "Flow Control": [
@@ -36,7 +40,7 @@ NODE_CATEGORIES = {
         ("⟳", "For"),
     ],
     "I/O": [
-        ("⌨", "Input"),
+        ("⌨️", "Input"),
         ("📺", "Output"),
     ],
     "Functions": [
@@ -127,6 +131,8 @@ class FlowPyApp(QMainWindow):
 
         # ── 8. Dosya menüsü ──────────────────────────────────────────
         self._setup_file_menu()
+        self._setup_edit_menu()
+        self._setup_view_menu()
 
         # ── 9. Node arama çubuğu ─────────────────────────────────────
         self.nodeSearchBar.textChanged.connect(self._filter_node_tree)
@@ -137,8 +143,16 @@ class FlowPyApp(QMainWindow):
         # ── 11. Zoom Bar bağlantıları ────────────────────────────────
         self._setup_zoom_bar()
 
+        # ── 11.5 Sayfa durumları (Page-1 / Page-2) ─────────────────
+        self._current_page = 1
+        self._page_states = {
+            1: FlowSerializer.serialize_to_dict(self.registry),
+            2: {"nodes": [], "edges": []},
+        }
+
         # ── 12. Pencere başlığı ──────────────────────────────────────
         self.setWindowTitle("FlowPy — Modern Algorithm IDE")
+        self.setWindowIcon(QIcon(APP_ICON_PATH))
         self.statusbar.showMessage(
             "Ready — Drag nodes to canvas, double-click to edit."
         )
@@ -236,6 +250,22 @@ class FlowPyApp(QMainWindow):
             btn = getattr(self, name, None)
             if btn:
                 color = SWATCH_COLORS[i][0]
+                btn.setStyleSheet(
+                    f"""
+                    QPushButton {{
+                        background-color: {color};
+                        border: 1px solid #4a4a4a;
+                        border-radius: 4px;
+                    }}
+                    QPushButton:hover {{
+                        border: 1px solid #f1c40f;
+                    }}
+                    QPushButton:disabled {{
+                        background-color: {color};
+                        border: 1px solid #3a3a3a;
+                    }}
+                    """
+                )
                 btn.clicked.connect(
                     lambda checked, c=color: self._apply_node_color(c))
 
@@ -353,6 +383,12 @@ class FlowPyApp(QMainWindow):
         page_group.addButton(self.pageTab1Btn)
         page_group.addButton(self.pageTab2Btn)
         page_group.setExclusive(True)
+        self.pageTab1Btn.clicked.connect(
+            lambda checked: checked and self._switch_page(1)
+        )
+        self.pageTab2Btn.clicked.connect(
+            lambda checked: checked and self._switch_page(2)
+        )
 
     def _zoom_in(self):
         factor = 1.2
@@ -383,6 +419,51 @@ class FlowPyApp(QMainWindow):
         else:
             self.graphicsView.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
 
+    def _reset_zoom(self):
+        """Yakınlaştırmayı %100'e döndürür."""
+        current_transform = self.graphicsView.transform().m11()
+        if current_transform != 0:
+            reset_factor = 1.0 / current_transform
+            self.graphicsView.scale(reset_factor, reset_factor)
+        self._zoom_level = 1.0
+        self._update_zoom_label()
+
+    def _fit_to_flow(self):
+        """Tüm akışı görünür alana sığdırır."""
+        rect = self.scene.itemsBoundingRect()
+        if rect.isNull() or rect.isEmpty():
+            return
+        self.graphicsView.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
+        self._zoom_level = self.graphicsView.transform().m11()
+        self._update_zoom_label()
+
+    def _switch_page(self, target_page: int):
+        """Sayfalar arasında geçiş yapar ve her sayfanın akış durumunu korur."""
+        if target_page == self._current_page:
+            return
+
+        # Mevcut sayfanın durumunu sakla
+        self._page_states[self._current_page] = FlowSerializer.serialize_to_dict(
+            self.registry
+        )
+
+        # Hedef sayfanın durumunu yükle
+        target_state = self._page_states.get(target_page, {"nodes": [], "edges": []})
+        FlowSerializer.deserialize_from_dict(target_state, self.registry, self.scene)
+
+        self._current_page = target_page
+        self._update_properties_panel()
+        self._update_style_panel()
+        self._update_variable_watcher({})
+        self._update_live_generation()
+
+        # Sayfa değişiminde undo geçmişini yeni durumla başlat
+        self.undo_manager._undo_stack.clear()
+        self.undo_manager._redo_stack.clear()
+        self.undo_manager.save_snapshot()
+
+        self.statusbar.showMessage(f"Switched to Page-{target_page}", 2500)
+
     # ── Dosya Menüsü ─────────────────────────────────────────────────
 
     def _setup_file_menu(self):
@@ -395,6 +476,47 @@ class FlowPyApp(QMainWindow):
         load_action.setShortcut("Ctrl+O")
         load_action.triggered.connect(self._load_flow)
         self.menuFile.addAction(load_action)
+
+    def _setup_edit_menu(self):
+        """Edit menüsünü çalışır undo/redo eylemleriyle doldurur."""
+        undo_action = QAction("↩️  Undo", self)
+        undo_action.setShortcut("Ctrl+Z")
+        undo_action.triggered.connect(self.undo_manager.undo)
+        self.menuEdit.addAction(undo_action)
+        self.addAction(undo_action)
+
+        redo_action = QAction("↪️  Redo", self)
+        redo_action.setShortcut("Ctrl+Y")
+        redo_action.triggered.connect(self.undo_manager.redo)
+        self.menuEdit.addAction(redo_action)
+        self.addAction(redo_action)
+
+    def _setup_view_menu(self):
+        """View menüsünü görünüm eylemleriyle doldurur."""
+        zoom_in_action = QAction("Zoom In", self)
+        zoom_in_action.setShortcut("Ctrl++")
+        zoom_in_action.triggered.connect(self._zoom_in)
+        self.menuView.addAction(zoom_in_action)
+
+        zoom_out_action = QAction("Zoom Out", self)
+        zoom_out_action.setShortcut("Ctrl+-")
+        zoom_out_action.triggered.connect(self._zoom_out)
+        self.menuView.addAction(zoom_out_action)
+
+        reset_zoom_action = QAction("Reset Zoom", self)
+        reset_zoom_action.setShortcut("Ctrl+0")
+        reset_zoom_action.triggered.connect(self._reset_zoom)
+        self.menuView.addAction(reset_zoom_action)
+
+        fit_action = QAction("Fit to Flow", self)
+        fit_action.setShortcut("Ctrl+9")
+        fit_action.triggered.connect(self._fit_to_flow)
+        self.menuView.addAction(fit_action)
+
+        self.menuView.addSeparator()
+        self.menuView.addAction(self.nodePanelDock.toggleViewAction())
+        self.menuView.addAction(self.rightPanelDock.toggleViewAction())
+        self.menuView.addAction(self.consoleDock.toggleViewAction())
 
         self.menuFile.addSeparator()
 
@@ -806,7 +928,16 @@ def setup_dark_theme(app: QApplication):
 # ═══════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
+    if sys.platform == "win32":
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                "FlowPy.ModernAlgorithmIDE"
+            )
+        except Exception:
+            pass
+
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon(APP_ICON_PATH))
     setup_dark_theme(app)
     window = FlowPyApp()
     window.show()

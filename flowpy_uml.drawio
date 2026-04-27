@@ -1,0 +1,171 @@
+<mxfile host="app.diagrams.net" modified="2026-04-21T12:00:00.000Z" agent="GPT-5.3-Codex" version="24.7.17" type="device">
+  <diagram id="class-diagram" name="Class Diagram">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1400" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="n1" value="FlowPyApp\n- scene: FlowScene\n- registry: NodeRegistry\n- interpreter: Interpreter\n- undo_manager: UndoManager\n- code_generator: CodeGenerator" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="330" height="150" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="n2" value="FlowScene\n+ start_connection()\n+ update_connection()\n+ finish_connection()\n+ dropEvent()\n+ delete_selected()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="430" y="40" width="260" height="140" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="n3" value="NodeRegistry\n+ nodes: dict\n+ edges: list\n+ add_node()\n+ add_edge()\n+ clear()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="740" y="40" width="230" height="130" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="n4" value="Interpreter\n+ run_flow()\n+ step_flow()\n+ stop_flow()\n+ _process_current_node()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="40" y="250" width="280" height="130" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="n5" value="FlowValidator\n+ validate()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="360" y="260" width="170" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="n6" value="UndoManager\n+ save_snapshot()\n+ undo()\n+ redo()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="560" y="250" width="180" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="n7" value="FlowSerializer\n+ serialize_to_dict()\n+ deserialize_from_dict()\n+ save_to_file()\n+ load_from_file()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="780" y="240" width="250" height="130" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="n8" value="CodeGenerator\n+ generate(language)\n+ _get_start_node()\n+ _get_next_node()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="240" width="220" height="120" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="n9" value="BaseNode" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="430" y="430" width="140" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n10" value="Port" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="610" y="430" width="120" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="n11" value="Edge" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="770" y="430" width="120" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e1" value="uses" style="endArrow=block;html=1;" edge="1" parent="1" source="n1" target="n2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" value="uses" style="endArrow=block;html=1;" edge="1" parent="1" source="n1" target="n3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" value="uses" style="endArrow=block;html=1;" edge="1" parent="1" source="n1" target="n4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" value="uses" style="endArrow=block;html=1;" edge="1" parent="1" source="n1" target="n6"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" value="uses" style="endArrow=block;html=1;" edge="1" parent="1" source="n1" target="n8"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" value="validates via" style="endArrow=block;html=1;" edge="1" parent="1" source="n4" target="n5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" value="reads" style="endArrow=block;html=1;" edge="1" parent="1" source="n4" target="n3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e8" value="snapshot" style="endArrow=block;html=1;" edge="1" parent="1" source="n6" target="n7"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e9" value="reads" style="endArrow=block;html=1;" edge="1" parent="1" source="n8" target="n3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e10" value="contains" style="endArrow=block;html=1;" edge="1" parent="1" source="n2" target="n9"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e11" value="creates" style="endArrow=block;html=1;" edge="1" parent="1" source="n2" target="n11"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e12" value="has" style="endArrow=block;html=1;" edge="1" parent="1" source="n9" target="n10"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e13" value="connects" style="endArrow=block;html=1;" edge="1" parent="1" source="n11" target="n9"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="component-diagram" name="Component Diagram">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1800" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="c1" value="UI Layer\nFlowPyApp\nFlowScene\nNodeEditorDialog\nmainwindow.ui" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="90" y="100" width="260" height="180" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="c2" value="Core Layer\nInterpreter\nGenerator\nValidator\nSerializer\nUndo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="430" y="100" width="240" height="180" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="c3" value="Model Layer\nBaseNode\nPort\nEdge\nNodeRegistry" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="760" y="100" width="240" height="180" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="c4" value="Persistence\n.flowpy / .json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1110" y="130" width="200" height="120" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ce1" value="calls" style="endArrow=block;html=1;" edge="1" parent="1" source="c1" target="c2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce2" value="renders/edits" style="endArrow=block;html=1;" edge="1" parent="1" source="c1" target="c3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce3" value="uses" style="endArrow=block;html=1;" edge="1" parent="1" source="c2" target="c3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ce4" value="save/load" style="endArrow=block;html=1;" edge="1" parent="1" source="c2" target="c4"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="sequence-diagram" name="Sequence Diagram Run Flow">
+    <mxGraphModel dx="1700" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="1400" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="s1" value="User" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="40" width="120" height="640" as="geometry"/>
+        </mxCell>
+        <mxCell id="s2" value="FlowPyApp" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="300" y="40" width="140" height="640" as="geometry"/>
+        </mxCell>
+        <mxCell id="s3" value="Interpreter" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="560" y="40" width="140" height="640" as="geometry"/>
+        </mxCell>
+        <mxCell id="s4" value="FlowValidator" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="820" y="40" width="150" height="640" as="geometry"/>
+        </mxCell>
+        <mxCell id="s5" value="NodeRegistry" style="shape=umlLifeline;perimeter=lifelinePerimeter;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1090" y="40" width="150" height="640" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="se1" value="Run All" style="endArrow=block;html=1;" edge="1" parent="1" source="s1" target="s2"><mxGeometry relative="1" as="geometry"><mxPoint x="0" y="120" as="targetPoint"/><Array as="points"><mxPoint x="260" y="120"/></Array></mxGeometry></mxCell>
+        <mxCell id="se2" value="run_flow()" style="endArrow=block;html=1;" edge="1" parent="1" source="s2" target="s3"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="520" y="180"/></Array></mxGeometry></mxCell>
+        <mxCell id="se3" value="validate()" style="endArrow=block;html=1;" edge="1" parent="1" source="s3" target="s4"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="780" y="240"/></Array></mxGeometry></mxCell>
+        <mxCell id="se4" value="get_all_nodes()/edges" style="endArrow=block;html=1;" edge="1" parent="1" source="s4" target="s5"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1050" y="300"/></Array></mxGeometry></mxCell>
+        <mxCell id="se5" value="ok/errors" style="endArrow=open;dashed=1;html=1;" edge="1" parent="1" source="s4" target="s3"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="780" y="360"/></Array></mxGeometry></mxCell>
+        <mxCell id="se6" value="scope_changed/highlight/log" style="endArrow=open;dashed=1;html=1;" edge="1" parent="1" source="s3" target="s2"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="520" y="430"/></Array></mxGeometry></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+
+  <diagram id="activity-diagram" name="Activity Diagram Interpreter">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2000" pageHeight="1400" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="a1" value="Start" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="90" y="70" width="110" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="a2" value="run_flow / step_flow" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="70" y="150" width="160" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="a3" value="_init_flow" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="90" y="245" width="120" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="a4" value="Validation OK?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="80" y="330" width="140" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="a5" value="Log errors\nHighlight invalid node\nStop" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="290" y="340" width="200" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="a6" value="_process_current_node" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="70" y="470" width="170" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="a7" value="next node exists?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="80" y="565" width="140" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="a8" value="Flow Finished" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="90" y="700" width="120" height="55" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ae1" style="endArrow=block;html=1;" edge="1" parent="1" source="a1" target="a2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae2" style="endArrow=block;html=1;" edge="1" parent="1" source="a2" target="a3"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae3" style="endArrow=block;html=1;" edge="1" parent="1" source="a3" target="a4"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae4" value="No" style="endArrow=block;html=1;" edge="1" parent="1" source="a4" target="a5"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae5" value="Yes" style="endArrow=block;html=1;" edge="1" parent="1" source="a4" target="a6"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae6" style="endArrow=block;html=1;" edge="1" parent="1" source="a6" target="a7"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae7" value="No" style="endArrow=block;html=1;" edge="1" parent="1" source="a7" target="a8"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="ae8" value="Yes" style="endArrow=block;html=1;" edge="1" parent="1" source="a7" target="a6"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
