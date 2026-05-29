@@ -10,12 +10,14 @@ import ctypes
 
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QFileDialog,
                               QTreeWidgetItem, QTableWidgetItem, QHeaderView,
-                              QButtonGroup)
+                              QButtonGroup, QToolButton)
 from PyQt6 import uic
-from PyQt6.QtGui import QAction, QIcon, QPalette, QColor
-from PyQt6.QtCore import Qt
+from PyQt6.QtGui import (QAction, QIcon, QPalette, QColor, QPainter, QPixmap, QFont)
+from PyQt6.QtCore import QPointF, Qt, QTimer, QEvent
 
 from core.registry import NodeRegistry
+from core.settings_manager import SettingsManager
+from core.i18n import t
 from core.interpreter import Interpreter
 from core.serializer import FlowSerializer
 from core.undo import UndoManager
@@ -28,26 +30,45 @@ BASE_DIR = os.path.dirname(__file__)
 APP_ICON_PATH = os.path.join(BASE_DIR, "docs", "icon-svg.svg")
 
 
-# ── Düğüm Kategori Tanımları ─────────────────────────────────────────
+# ── Düğüm Kategori Tanımları (isim, renk, ikon şekli) ─────────────────
 NODE_CATEGORIES = {
     "Basic": [
-        ("▶️", "Start"),
-        ("⏹️", "Process"),
-        ("◇", "Decision"),
+        ("Start",    "#22c55e", "rect"),
+        ("Process",  "#3b82f6", "rect"),
+        ("Decision", "#f59e0b", "diamond"),
     ],
     "Flow Control": [
-        ("↻", "While"),
-        ("⟳", "For"),
+        ("While", "#8b5cf6", "circle"),
+        ("For",   "#8b5cf6", "circle"),
     ],
     "I/O": [
-        ("⌨️", "Input"),
-        ("📺", "Output"),
+        ("Input",  "#22c55e", "rect"),
+        ("Output", "#22c55e", "rect"),
     ],
     "Functions": [
-        ("ƒ", "Function"),
-        ("↩", "Return"),
+        ("Function", "#ec4899", "rect"),
+        ("Return",   "#ec4899", "rect"),
     ],
 }
+
+
+def _make_color_icon(hex_color: str, shape: str = "rect") -> QIcon:
+    """16x16 renkli palet ikonu oluşturur."""
+    pixmap = QPixmap(16, 16)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setBrush(QColor(hex_color))
+    painter.setPen(Qt.PenStyle.NoPen)
+    if shape == "diamond":
+        points = [QPointF(8, 1), QPointF(15, 8), QPointF(8, 15), QPointF(1, 8)]
+        painter.drawPolygon(points)
+    elif shape == "circle":
+        painter.drawEllipse(2, 2, 12, 12)
+    else:
+        painter.drawRoundedRect(2, 2, 12, 12, 3, 3)
+    painter.end()
+    return QIcon(pixmap)
 
 # Renk swatchları için düğüm renk eşlemesi
 SWATCH_COLORS = [
@@ -83,6 +104,7 @@ class FlowPyApp(QMainWindow):
         self.current_scene = self.scenes["page1"]
         self.graphicsView.setScene(self.current_scene)
         self.graphicsView.setAcceptDrops(True)
+        self.graphicsView.installEventFilter(self)
 
         # ── 3.1 Yakınlaştırma ve Kaydırma filtresi ───────────────────
         self.zoom_pan_filter = ZoomPanFilter(self.graphicsView, self)
@@ -96,6 +118,9 @@ class FlowPyApp(QMainWindow):
 
         # ── 5. Node Tree (kategorili) ────────────────────────────────
         self._setup_node_tree()
+        self._setup_inspector_badge()
+        self._setup_console_output()
+        self._setup_toolbar_button_styles()
 
         # ── 6. Sinyal / Slot bağlantıları ────────────────────────────
         self.interpreter.log_message.connect(self.consoleOutput.append)
@@ -153,11 +178,82 @@ class FlowPyApp(QMainWindow):
         }
 
         # ── 12. Pencere başlığı ──────────────────────────────────────
-        self.setWindowTitle("FlowPy — Modern Algorithm IDE")
+        self.setWindowTitle(t("app_title"))
         self.setWindowIcon(QIcon(APP_ICON_PATH))
-        self.statusbar.showMessage(
-            "Ready — Drag nodes to canvas, double-click to edit."
-        )
+
+        self._guided_tour = None
+        SettingsManager.instance().ensure_defaults()
+        self._apply_ui_strings()
+        self._maybe_show_welcome()
+
+    def _apply_ui_strings(self):
+        """Aktif dile göre menü ve panel metinlerini günceller."""
+        self.statusbar.showMessage(t("ready_message"))
+        self.setWindowTitle(t("app_title"))
+        if hasattr(self, "actionRunFlow"):
+            self.actionRunFlow.setText(t("run_all"))
+        if hasattr(self, "nodePanelDock"):
+            self.nodePanelDock.setWindowTitle(t("node_palette"))
+        if hasattr(self, "rightPanelDock"):
+            self.rightPanelDock.setWindowTitle(t("inspector"))
+        if hasattr(self, "consoleDock"):
+            self.consoleDock.setWindowTitle(t("console_output"))
+
+    def _maybe_show_welcome(self):
+        """İlk açılışta karşılama ekranını gösterir."""
+        sm = SettingsManager.instance()
+        if not sm.get_bool("show_welcome_on_startup", True):
+            QTimer.singleShot(300, self._start_guided_tour)
+            return
+        if sm.get_bool("welcome_shown", False):
+            QTimer.singleShot(300, self._start_guided_tour)
+            return
+
+        from views.welcome_screen import FlowPyWelcomeScreen
+        dialog = FlowPyWelcomeScreen(self)
+        dialog.exec()
+        if dialog.load_example:
+            self._load_example_flow()
+        QTimer.singleShot(300, self._start_guided_tour)
+
+    def _load_example_flow(self):
+        """Örnek akış dosyasını yükler (varsa)."""
+        path = os.path.join(BASE_DIR, "created_flows", "ornek.flowpy")
+        if not os.path.isfile(path):
+            return
+        FlowSerializer.load_from_file(path, self.registry, self.current_scene)
+        self._page_states["page1"] = FlowSerializer.serialize_to_dict(self.registry)
+        self.undo_manager._undo_stack.clear()
+        self.undo_manager._redo_stack.clear()
+        self.undo_manager.save_snapshot()
+        self._update_live_generation()
+        self.statusbar.showMessage(f"✔ Örnek akış yüklendi.", 4000)
+
+    def _start_guided_tour(self):
+        """Eğitim turunu başlatır (ayarlara göre)."""
+        sm = SettingsManager.instance()
+        if sm.get_bool("tour_completed", False):
+            return
+        if not sm.get_bool("show_tour_on_startup", True):
+            return
+        from views.guided_tour import GuidedTour
+        if self._guided_tour is None:
+            self._guided_tour = GuidedTour(self)
+        self._guided_tour.start()
+
+    def _open_settings(self):
+        """Ayarlar diyaloğunu açar."""
+        from views.settings_dialog import SettingsDialog
+        if SettingsDialog(self).exec():
+            self._apply_ui_strings()
+
+    def _restart_guided_tour(self):
+        """Eğitim turunu sıfırlayıp yeniden başlatır."""
+        SettingsManager.instance().set_bool("tour_completed", False)
+        from views.guided_tour import GuidedTour
+        if self._guided_tour is None:
+            self._guided_tour = GuidedTour(self)
+        self._guided_tour.restart()
 
     def _connect_scene_signals(self, scene):
         """Sahne değiştikçe sinyalleri yeni sahneye bağlar."""
@@ -249,12 +345,103 @@ class FlowPyApp(QMainWindow):
             cat_item.setFlags(cat_item.flags() & ~Qt.ItemFlag.ItemIsDragEnabled)
             font = cat_item.font(0)
             font.setBold(True)
+            font.setPointSize(9)
+            cat_item.setForeground(0, QColor("#555555"))
             cat_item.setFont(0, font)
-            for icon, name in nodes:
-                child = QTreeWidgetItem(cat_item, [f"  {icon}  {name}"])
+            for name, color, shape in nodes:
+                child = QTreeWidgetItem(cat_item, [f"  {name}"])
                 child.setData(0, Qt.ItemDataRole.UserRole, name)
+                child.setIcon(0, _make_color_icon(color, shape))
                 child.setFlags(child.flags() | Qt.ItemFlag.ItemIsDragEnabled)
             cat_item.setExpanded(True)
+
+    def _setup_console_output(self):
+        """Konsol çıktısını HTML loglar için hazırlar."""
+        self.consoleOutput.setReadOnly(True)
+        self.consoleOutput.setAcceptRichText(True)
+        self.consoleOutput.setUndoRedoEnabled(False)
+        if hasattr(self, "propDetails"):
+            self.propDetails.setUndoRedoEnabled(False)
+
+    def _setup_inspector_badge(self):
+        """Inspector panelinde tema uyumlu düğüm rozeti oluşturur."""
+        from PyQt6.QtWidgets import QFrame, QVBoxLayout
+        layout = self.propertiesTabLayout
+        idx = layout.indexOf(self.propNodeTitle)
+        self.propNodeBadge = QFrame()
+        self.propNodeBadge.setObjectName("propNodeBadge")
+        badge_layout = QVBoxLayout(self.propNodeBadge)
+        badge_layout.setContentsMargins(8, 8, 8, 8)
+        badge_layout.setSpacing(4)
+        layout.removeWidget(self.propNodeTitle)
+        layout.removeWidget(self.propNodeId)
+        badge_layout.addWidget(self.propNodeTitle)
+        badge_layout.addWidget(self.propNodeId)
+        layout.insertWidget(idx, self.propNodeBadge)
+
+    def _toolbar_button_for_action(self, action: QAction) -> QToolButton | None:
+        """Toolbar'daki QAction'a karşılık gelen QToolButton'ı bulur."""
+        toolbar = getattr(self, "mainToolBar", None)
+        if not toolbar:
+            return None
+        for btn in toolbar.findChildren(QToolButton):
+            if btn.defaultAction() is action:
+                return btn
+        return None
+
+    def _style_toolbar_action(self, action: QAction, stylesheet: str):
+        btn = self._toolbar_button_for_action(action)
+        if btn:
+            btn.setStyleSheet(stylesheet)
+
+    def _setup_toolbar_button_styles(self):
+        """Çalıştırma araç çubuğu butonlarına özel stiller uygular."""
+        self._style_toolbar_action(self.actionRunFlow, """
+            QToolButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #1a6b38, stop:1 #0d4022);
+                color: #4ade80;
+                border: 1px solid #22c55e44;
+                border-radius: 6px;
+                padding: 5px 14px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QToolButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #22a050, stop:1 #145c2e);
+                border-color: #4ade8066;
+            }
+            QToolButton:disabled { background: #1a1a1a; color: #333; border-color: #222; }
+        """)
+        self._style_toolbar_action(self.actionStepFlow, """
+            QToolButton {
+                background: #1e1e2e;
+                color: #a78bfa;
+                border: 1px solid #3a1a6e;
+                border-radius: 6px;
+                padding: 5px 14px;
+                font-weight: bold;
+            }
+            QToolButton:hover { background: #252535; border-color: #8b5cf6; }
+            QToolButton:disabled { background: #1a1a1a; color: #333; border-color: #222; }
+        """)
+        self._style_toolbar_action(self.actionStopFlow, """
+            QToolButton {
+                background: #1a1a1a;
+                color: #444;
+                border: 1px solid #2a2a2a;
+                border-radius: 6px;
+                padding: 5px 14px;
+                font-weight: bold;
+            }
+            QToolButton:enabled {
+                background: #2e0d0d;
+                color: #f87171;
+                border-color: #6e1a1a;
+            }
+            QToolButton:enabled:hover { background: #3d1010; border-color: #ef4444; }
+        """)
 
     def _filter_node_tree(self, text: str):
         """Arama metnine göre node ağacını filtreler."""
@@ -498,17 +685,57 @@ class FlowPyApp(QMainWindow):
 
     def _setup_edit_menu(self):
         """Edit menüsünü çalışır undo/redo eylemleriyle doldurur."""
-        undo_action = QAction("↩️  Undo", self)
-        undo_action.setShortcut("Ctrl+Z")
-        undo_action.triggered.connect(self.undo_manager.undo)
-        self.menuEdit.addAction(undo_action)
-        self.addAction(undo_action)
+        self._undo_action = QAction("↩️  Undo", self)
+        self._undo_action.setShortcut("Ctrl+Z")
+        self._undo_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+        self._undo_action.triggered.connect(self._perform_undo)
+        self.menuEdit.addAction(self._undo_action)
+        self.addAction(self._undo_action)
 
-        redo_action = QAction("↪️  Redo", self)
-        redo_action.setShortcut("Ctrl+Y")
-        redo_action.triggered.connect(self.undo_manager.redo)
-        self.menuEdit.addAction(redo_action)
-        self.addAction(redo_action)
+        self._redo_action = QAction("↪️  Redo", self)
+        self._redo_action.setShortcut("Ctrl+Y")
+        self._redo_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+        self._redo_action.triggered.connect(self._perform_redo)
+        self.menuEdit.addAction(self._redo_action)
+        self.addAction(self._redo_action)
+
+    def eventFilter(self, obj, event):
+        """Canvas odaktayken Ctrl+Z / Ctrl+Y kısayollarını yakalar."""
+        if obj is self.graphicsView and event.type() == QEvent.Type.KeyPress:
+            if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+                if event.key() == Qt.Key.Key_Z:
+                    self._perform_undo()
+                    return True
+                if event.key() == Qt.Key.Key_Y:
+                    self._perform_redo()
+                    return True
+        return super().eventFilter(obj, event)
+
+    def _perform_undo(self):
+        """Canvas geri alma + panelleri yenile."""
+        if not self.undo_manager.undo():
+            self.statusbar.showMessage("Geri alınacak işlem yok.", 2000)
+            return
+        self._after_history_restore()
+        self.statusbar.showMessage("↩ Geri alındı.", 1500)
+
+    def _perform_redo(self):
+        """Canvas ileri alma + panelleri yenile."""
+        if not self.undo_manager.redo():
+            self.statusbar.showMessage("İleri alınacak işlem yok.", 2000)
+            return
+        self._after_history_restore()
+        self.statusbar.showMessage("↪ İleri alındı.", 1500)
+
+    def _after_history_restore(self):
+        """Undo/redo sonrası sahne durumunu panellerle senkronize eder."""
+        self._page_states[self._current_page_key] = FlowSerializer.serialize_to_dict(
+            self.registry
+        )
+        self._clear_all_highlights()
+        self._update_properties_panel()
+        self._update_style_panel()
+        self._update_live_generation()
 
     def _setup_view_menu(self):
         """View menüsünü görünüm eylemleriyle doldurur."""
@@ -537,19 +764,19 @@ class FlowPyApp(QMainWindow):
         self.menuView.addAction(self.rightPanelDock.toggleViewAction())
         self.menuView.addAction(self.consoleDock.toggleViewAction())
 
+        self.menuView.addSeparator()
+        settings_action = QAction(t("settings"), self)
+        settings_action.setShortcut("Ctrl+,")
+        settings_action.triggered.connect(self._open_settings)
+        self.menuView.addAction(settings_action)
+
+        restart_tour_action = QAction(t("restart_tour"), self)
+        restart_tour_action.triggered.connect(self._restart_guided_tour)
+        self.menuView.addAction(restart_tour_action)
+
         self.menuFile.addSeparator()
-
-        undo_action = QAction("↩️  Undo", self)
-        undo_action.setShortcut("Ctrl+Z")
-        undo_action.triggered.connect(self.undo_manager.undo)
-        self.menuFile.addAction(undo_action)
-        self.addAction(undo_action)
-
-        redo_action = QAction("↪️  Redo", self)
-        redo_action.setShortcut("Ctrl+Y")
-        redo_action.triggered.connect(self.undo_manager.redo)
-        self.menuFile.addAction(redo_action)
-        self.addAction(redo_action)
+        self.menuFile.addAction(self._undo_action)
+        self.menuFile.addAction(self._redo_action)
 
     def _save_flow(self):
         filepath, _ = QFileDialog.getSaveFileName(
@@ -578,6 +805,10 @@ class FlowPyApp(QMainWindow):
     # ── Vurgulama ─────────────────────────────────────────────────────
 
     def _highlight_node(self, node):
+        for item in self.current_scene.items():
+            if isinstance(item, BaseNode) and item is not node:
+                if hasattr(item, "set_highlight"):
+                    item.set_highlight(False)
         if hasattr(node, "set_highlight"):
             node.set_highlight(True)
         else:
@@ -611,16 +842,34 @@ class FlowPyApp(QMainWindow):
         nodes = [item for item in selected if isinstance(item, BaseNode)]
 
         if not nodes:
-            self.propNodeTitle.setText("No Node Selected")
+            self.propNodeTitle.setText(t("no_node_selected"))
             self.propNodeId.setText("")
             self.propDetails.clear()
+            if hasattr(self, "propNodeBadge"):
+                self.propNodeBadge.setStyleSheet("")
+            self.propNodeTitle.setStyleSheet("")
+            self.propNodeId.setStyleSheet("")
             return
 
         node = nodes[0]
         short_id = node.node_id[:8] if len(node.node_id) >= 8 else node.node_id
+        theme = BaseNode.NODE_THEME.get(node.title, BaseNode.DEFAULT_THEME)
 
-        self.propNodeTitle.setText(f"📦  {node.title}")
+        if hasattr(self, "propNodeBadge"):
+            self.propNodeBadge.setStyleSheet(f"""
+                QWidget#propNodeBadge {{
+                    background: {theme['bg']};
+                    border: 1px solid {theme['border']};
+                    border-radius: 8px;
+                    padding: 8px;
+                }}
+            """)
+        self.propNodeTitle.setText(node.title)
+        self.propNodeTitle.setStyleSheet(
+            f"color: {theme['text']}; font-weight: bold; font-size: 13px;"
+        )
         self.propNodeId.setText(f"ID: {short_id}…")
+        self.propNodeId.setStyleSheet("color: #444444; font-size: 10px;")
 
         lines = []
         for key, value in node.properties.items():
@@ -630,6 +879,16 @@ class FlowPyApp(QMainWindow):
         lines.append(f"<br><b>Input Ports:</b> {len(node.input_ports)}")
         lines.append(f"<b>Output Ports:</b> {len(node.output_ports)}")
         lines.append(f"<b>Connections:</b> {len(node.edges)}")
+
+        if node.title == "Decision":
+            lines.append("""
+<div style='margin-top:8px;display:flex;gap:6px'>
+  <span style='background:#14291a;color:#4ade80;font-size:10px;
+               padding:2px 8px;border-radius:4px;font-weight:600'>Port 0 → True</span>
+  <span style='background:#1e1200;color:#fbbf24;font-size:10px;
+               padding:2px 8px;border-radius:4px;font-weight:600'>Port 1 → False</span>
+</div>
+""")
 
         self.propDetails.setHtml("<br>".join(lines))
 
@@ -654,18 +913,39 @@ class FlowPyApp(QMainWindow):
             self.actionRunFlow.setEnabled(True)
             self.actionStepFlow.setEnabled(True)
             self.actionStopFlow.setEnabled(False)
-            self.actionRunFlow.setText("▶ Run All")
+            self.actionRunFlow.setText(t("run_all"))
             self.variableTable.setRowCount(0)
+            self.statusbar.setStyleSheet(
+                "QStatusBar { background: #111111; color: #444444; "
+                "border-top: 1px solid #1e1e1e; }"
+            )
+            self.statusbar.showMessage(t("ready_message"))
         else:
             if is_paused:
                 self.actionRunFlow.setEnabled(True)
                 self.actionStepFlow.setEnabled(True)
                 self.actionStopFlow.setEnabled(True)
-                self.actionRunFlow.setText("▶ Continue")
+                self.actionRunFlow.setText(t("continue_run"))
+                self.statusbar.setStyleSheet(
+                    "QStatusBar { background: #1e1200; color: #fbbf24; "
+                    "border-top: 1px solid #3d2800; }"
+                )
+                self.statusbar.showMessage(
+                    f"⏸ Duraklatıldı  ·  Adım: {self.interpreter._current_step}"
+                )
             else:
                 self.actionRunFlow.setEnabled(False)
                 self.actionStepFlow.setEnabled(False)
                 self.actionStopFlow.setEnabled(True)
+                self.statusbar.setStyleSheet(
+                    "QStatusBar { background: #0d1a0d; color: #4ade80; "
+                    "border-top: 1px solid #1a6b38; }"
+                )
+                node_count = len(self.registry.get_all_nodes())
+                edge_count = len(self.registry.edges)
+                self.statusbar.showMessage(
+                    f"● Çalışıyor  ·  {node_count} node · {edge_count} edge"
+                )
 
     # ── Live Code Generation ──────────────────────────────────────────
 
@@ -711,20 +991,174 @@ class FlowPyApp(QMainWindow):
 
 # ── Tema Kurulumu ─────────────────────────────────────────────────────
 
-def setup_dark_theme(app: QApplication):
-    """Modern koyu tema — Fusion palette + global stylesheet."""
+THEMES = {
+    "dark": {
+        "bg": "#1e1e1e", "panel": "#2a2a2a", "base": "#161616",
+        "accent": "#4078c8", "highlight": "#376ec8", "text": "#dcdcdc",
+        "border": "#333333", "input_bg": "#1a2030",
+    },
+    "light": {
+        "bg": "#f0f0f0", "panel": "#ffffff", "base": "#ffffff",
+        "accent": "#2a5cbf", "highlight": "#2a5cbf", "text": "#1a1a1a",
+        "border": "#cccccc", "input_bg": "#ffffff",
+    },
+    "ocean": {
+        "bg": "#0d1b2a", "panel": "#1a2d3f", "base": "#0a1520",
+        "accent": "#00b4d8", "highlight": "#0096c7", "text": "#cce7f0",
+        "border": "#1e3a50", "input_bg": "#122535",
+    },
+}
+
+
+def _build_stylesheet(theme: dict) -> str:
+    """Tema renklerinden global Qt stylesheet üretir."""
+    bg = theme["bg"]
+    panel = theme["panel"]
+    base = theme["base"]
+    accent = theme["accent"]
+    highlight = theme["highlight"]
+    text = theme["text"]
+    border = theme["border"]
+    input_bg = theme["input_bg"]
+    return f"""
+        QMainWindow, QWidget {{
+            font-family: "Segoe UI", sans-serif;
+            font-size: 11px;
+        }}
+        QMenuBar {{
+            background-color: {bg};
+            color: {text};
+            border-bottom: 1px solid {border};
+            padding: 2px 4px;
+        }}
+        QMenuBar::item:selected {{ background: {accent}; border-radius: 4px; }}
+        QMenu {{
+            background-color: {panel};
+            color: {text};
+            border: 1px solid {border};
+        }}
+        QMenu::item:selected {{ background: {accent}; }}
+        QToolBar {{
+            background-color: {panel};
+            border-bottom: 1px solid {border};
+            padding: 3px 6px;
+            spacing: 6px;
+        }}
+        QToolBar QToolButton {{
+            color: {text};
+            background: {panel};
+            border: 1px solid {border};
+            border-radius: 5px;
+            padding: 4px 10px;
+            font-weight: bold;
+        }}
+        QToolBar QToolButton:hover {{ background: {accent}; border-color: {accent}; }}
+        QToolBar QToolButton:pressed {{ background: {highlight}; }}
+        QToolBar QToolButton:disabled {{ color: #888; }}
+        QDockWidget::title {{
+            background: {panel};
+            border-bottom: 2px solid {accent};
+            padding: 4px 8px;
+            text-align: left;
+        }}
+        QTabWidget::pane {{ border: 1px solid {border}; background: {panel}; }}
+        QTabBar::tab {{
+            background: {bg};
+            color: {text};
+            border: 1px solid {border};
+            padding: 5px 12px;
+        }}
+        QTabBar::tab:selected {{
+            background: {panel};
+            border-top: 2px solid {accent};
+        }}
+        QTreeWidget {{
+            background-color: {bg};
+            color: {text};
+            border: none;
+        }}
+        QTreeWidget::item:hover {{ background: {accent}33; }}
+        QTreeWidget::item:selected {{ background: {accent}; color: #fff; }}
+        QLineEdit {{
+            background: {input_bg};
+            color: {text};
+            border: 1px solid {border};
+            border-radius: 6px;
+            padding: 4px 8px;
+        }}
+        QLineEdit:focus {{ border-color: {accent}; }}
+        QTableWidget {{
+            background: {bg};
+            color: {text};
+            gridline-color: {border};
+            border: none;
+        }}
+        QHeaderView::section {{
+            background: {panel};
+            color: {text};
+            border: none;
+            padding: 4px;
+        }}
+        QTextEdit, QTextBrowser {{
+            background: {base};
+            color: {text};
+            border: 1px solid {border};
+            border-radius: 4px;
+        }}
+        QScrollBar:vertical {{ background: {bg}; width: 8px; }}
+        QScrollBar::handle:vertical {{ background: {border}; border-radius: 4px; }}
+        QComboBox {{
+            background: {panel};
+            color: {text};
+            border: 1px solid {border};
+            border-radius: 4px;
+            padding: 3px 8px;
+        }}
+        QComboBox QAbstractItemView {{
+            background: {panel};
+            selection-background-color: {accent};
+        }}
+        QSlider::handle:horizontal {{
+            background: {accent};
+            border-radius: 7px;
+        }}
+        QSlider::sub-page:horizontal {{ background: {accent}; }}
+        #bottomBar {{
+            background: {bg};
+            border-top: 1px solid {border};
+        }}
+        QStatusBar {{
+            background: {base};
+            color: {text};
+            border-top: 1px solid {border};
+            font-size: 10px;
+        }}
+        QPushButton {{
+            background: {panel};
+            color: {text};
+            border: 1px solid {border};
+            border-radius: 4px;
+            padding: 4px 10px;
+        }}
+        QPushButton:hover {{ border-color: {accent}; }}
+    """
+
+
+def setup_theme(theme_name: str, app: QApplication):
+    """Seçilen temayı uygular — Fusion palette + global stylesheet."""
+    theme = THEMES.get(theme_name, THEMES["dark"])
     app.setStyle("Fusion")
     palette = QPalette()
 
-    bg = QColor(30, 30, 30)
-    panel = QColor(40, 40, 40)
-    text = QColor(220, 220, 220)
-    accent = QColor(64, 120, 210)
-    highlight = QColor(55, 110, 200)
+    bg = QColor(theme["bg"])
+    panel = QColor(theme["panel"])
+    text = QColor(theme["text"])
+    accent = QColor(theme["accent"])
+    highlight = QColor(theme["highlight"])
 
     palette.setColor(QPalette.ColorRole.Window, bg)
     palette.setColor(QPalette.ColorRole.WindowText, text)
-    palette.setColor(QPalette.ColorRole.Base, QColor(22, 22, 22))
+    palette.setColor(QPalette.ColorRole.Base, QColor(theme["base"]))
     palette.setColor(QPalette.ColorRole.AlternateBase, panel)
     palette.setColor(QPalette.ColorRole.ToolTipBase, text)
     palette.setColor(QPalette.ColorRole.ToolTipText, text)
@@ -736,212 +1170,12 @@ def setup_dark_theme(app: QApplication):
     palette.setColor(QPalette.ColorRole.Highlight, highlight)
     palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.white)
     app.setPalette(palette)
+    app.setStyleSheet(_build_stylesheet(theme))
 
-    app.setStyleSheet("""
-        /* ── Global ── */
-        QMainWindow, QWidget {
-            font-family: "Segoe UI", sans-serif;
-            font-size: 11px;
-        }
 
-        /* ── Menu Bar ── */
-        QMenuBar {
-            background-color: #1e1e1e;
-            color: #ddd;
-            border-bottom: 1px solid #333;
-            padding: 2px 4px;
-        }
-        QMenuBar::item:selected { background: #3c5a8a; border-radius: 4px; }
-        QMenu {
-            background-color: #2a2a2a;
-            color: #ddd;
-            border: 1px solid #444;
-        }
-        QMenu::item:selected { background: #3c5a8a; }
-
-        /* ── Toolbar ── */
-        QToolBar {
-            background-color: #252525;
-            border-bottom: 1px solid #3a3a3a;
-            padding: 3px 6px;
-            spacing: 6px;
-        }
-        QToolBar QToolButton {
-            color: #ddd;
-            background: #333;
-            border: 1px solid #4a4a4a;
-            border-radius: 5px;
-            padding: 4px 10px;
-            font-weight: bold;
-        }
-        QToolBar QToolButton:hover { background: #3c5a8a; border-color: #5a80c0; }
-        QToolBar QToolButton:pressed { background: #2a4070; }
-        QToolBar QToolButton:disabled { color: #666; background: #2a2a2a; }
-
-        /* ── Dock Widgets ── */
-        QDockWidget {
-            color: #ccc;
-            font-weight: bold;
-            titlebar-close-icon: none;
-        }
-        QDockWidget::title {
-            background: #2a2a2a;
-            border-bottom: 2px solid #4078c8;
-            padding: 4px 8px;
-            text-align: left;
-        }
-
-        /* ── Tab Widget ── */
-        QTabWidget::pane {
-            border: 1px solid #3a3a3a;
-            background: #252525;
-        }
-        QTabBar::tab {
-            background: #222;
-            color: #aaa;
-            border: 1px solid #3a3a3a;
-            border-bottom: none;
-            padding: 5px 12px;
-            margin-right: 2px;
-            border-top-left-radius: 4px;
-            border-top-right-radius: 4px;
-        }
-        QTabBar::tab:selected {
-            background: #2e2e2e;
-            color: #fff;
-            border-top: 2px solid #4078c8;
-        }
-        QTabBar::tab:hover:!selected { background: #2a2a2a; color: #ddd; }
-
-        /* ── Tree Widget (Node Palette) ── */
-        QTreeWidget {
-            background-color: #1e1e1e;
-            color: #ccc;
-            border: none;
-            alternate-background-color: #232323;
-        }
-        QTreeWidget::item {
-            padding: 3px 2px;
-            border-radius: 3px;
-        }
-        QTreeWidget::item:hover { background: #2c3e5a; }
-        QTreeWidget::item:selected { background: #3c5a8a; color: #fff; }
-
-        /* ── Search bar ── */
-        QLineEdit {
-            background: #1a2030;
-            color: #ddd;
-            border: 1px solid #3a4a6a;
-            border-radius: 6px;
-            padding: 4px 8px;
-        }
-        QLineEdit:focus { border-color: #4078c8; }
-
-        /* ── Tables & Text ── */
-        QTableWidget {
-            background: #1e1e1e;
-            color: #ccc;
-            gridline-color: #333;
-            border: none;
-        }
-        QHeaderView::section {
-            background: #2a2a2a;
-            color: #bbb;
-            border: none;
-            padding: 4px;
-            border-right: 1px solid #333;
-        }
-        QTextEdit, QTextBrowser {
-            background: #1a1a1a;
-            color: #ccc;
-            border: 1px solid #333;
-            border-radius: 4px;
-        }
-        QScrollBar:vertical {
-            background: #1e1e1e;
-            width: 8px;
-        }
-        QScrollBar::handle:vertical { background: #444; border-radius: 4px; }
-        QScrollBar:horizontal {
-            background: #1e1e1e;
-            height: 8px;
-        }
-        QScrollBar::handle:horizontal { background: #444; border-radius: 4px; }
-
-        /* ── Combo Box ── */
-        QComboBox {
-            background: #2a2a2a;
-            color: #ddd;
-            border: 1px solid #4a4a4a;
-            border-radius: 4px;
-            padding: 3px 8px;
-        }
-        QComboBox::drop-down { border: none; }
-        QComboBox QAbstractItemView {
-            background: #2a2a2a;
-            color: #ddd;
-            selection-background-color: #3c5a8a;
-        }
-
-        /* ── Sliders ── */
-        QSlider::groove:horizontal {
-            background: #333;
-            height: 4px;
-            border-radius: 2px;
-        }
-        QSlider::handle:horizontal {
-            background: #4078c8;
-            width: 14px;
-            height: 14px;
-            margin: -5px 0;
-            border-radius: 7px;
-        }
-        QSlider::sub-page:horizontal { background: #4078c8; border-radius: 2px; }
-
-        /* ── Bottom Bar ── */
-        #bottomBar {
-            background: #1e1e1e;
-            border-top: 1px solid #333;
-        }
-        #bottomBar QPushButton {
-            background: #2a2a2a;
-            color: #ccc;
-            border: 1px solid #3a3a3a;
-            border-radius: 4px;
-            padding: 2px 8px;
-            font-size: 11px;
-        }
-        #bottomBar QPushButton:hover { background: #333; }
-        #bottomBar QPushButton:checked {
-            background: #3c5a8a;
-            color: #fff;
-            border-color: #4078c8;
-        }
-        #bottomBar QLabel {
-            color: #aaa;
-            font-size: 11px;
-        }
-
-        /* ── Status Bar ── */
-        QStatusBar {
-            background: #1a1a1a;
-            color: #888;
-            border-top: 1px solid #2a2a2a;
-            font-size: 10px;
-        }
-
-        /* ── Push Buttons (general) ── */
-        QPushButton {
-            background: #2d2d2d;
-            color: #ccc;
-            border: 1px solid #444;
-            border-radius: 4px;
-            padding: 4px 10px;
-        }
-        QPushButton:hover { background: #363636; border-color: #5a7ac0; }
-        QPushButton:pressed { background: #222; }
-        QPushButton:disabled { color: #555; background: #222; border-color: #333; }
-    """)
+def setup_dark_theme(app: QApplication):
+    """Geriye dönük uyumluluk — koyu temayı uygular."""
+    setup_theme("dark", app)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -957,7 +1191,9 @@ if __name__ == "__main__":
 
     app = QApplication(sys.argv)
     app.setWindowIcon(QIcon(APP_ICON_PATH))
-    setup_dark_theme(app)
+    SettingsManager.instance().ensure_defaults()
+    theme_name = SettingsManager.instance().get("theme", "dark")
+    setup_theme(theme_name, app)
     window = FlowPyApp()
     window.show()
     sys.exit(app.exec())

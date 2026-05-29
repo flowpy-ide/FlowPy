@@ -395,11 +395,19 @@ class FlowScene(QGraphicsScene):
     # ══════════════════════════════════════════════════════════════════
 
     def keyPressEvent(self, event):
-        """Delete tuşu ile seçili öğeleri sil."""
+        """Delete tuşu ile seçili öğeleri sil; Ctrl+Z/Y ana pencereye bırakılır."""
         if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
             self.delete_selected()
-        else:
-            super().keyPressEvent(event)
+            event.accept()
+            return
+        if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+            if event.key() == Qt.Key.Key_Z:
+                event.ignore()
+                return
+            if event.key() == Qt.Key.Key_Y:
+                event.ignore()
+                return
+        super().keyPressEvent(event)
 
     def contextMenuEvent(self, event):
         """Sağ tık bağlam menüsü."""

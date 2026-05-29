@@ -44,6 +44,22 @@ class CodeGenerator:
             if cond.lower() == "false": return "false"
         return cond
 
+    def _python_input_line(self, node, indent: str) -> str:
+        """INPUT düğümü için input_type'a göre Python satırı üretir."""
+        var_name = node.properties.get("variable", "user_in").strip()
+        prompt = node.properties.get("prompt", "").strip()
+        input_type = node.properties.get("input_type", "auto").strip()
+        inner = f"input('{prompt} ')"
+        if input_type == "int":
+            expr = f"int({inner})"
+        elif input_type == "float":
+            expr = f"float({inner})"
+        elif input_type == "str":
+            expr = inner
+        else:
+            expr = inner
+        return f"{indent}{var_name} = {expr}\n"
+
     def _get_start_node(self):
         nodes = self.registry.get_all_nodes()
         for n in nodes.values():
@@ -219,9 +235,7 @@ class CodeGenerator:
             code += self._generate_python(self._get_next_node(node, 0), visited, indent_level)
 
         elif title == "Input":
-            var_name = node.properties.get("variable", "user_in").strip()
-            prompt = node.properties.get("prompt", "").strip()
-            code += f"{indent}{var_name} = input('{prompt} ')\n"
+            code += self._python_input_line(node, indent)
             code += self._generate_python(self._get_next_node(node, 0), visited, indent_level)
 
         elif title == "Output":

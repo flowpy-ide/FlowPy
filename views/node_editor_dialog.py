@@ -150,6 +150,13 @@ class NodeEditorDialog(QDialog):
         form.addRow("Soru (Prompt):", prompt_edit)
         self._inputs["prompt"] = prompt_edit
 
+        type_combo = QComboBox()
+        type_combo.addItems(["auto", "int", "float", "str"])
+        current = self.node.properties.get("input_type", "auto")
+        type_combo.setCurrentText(current)
+        form.addRow("Girdi Tipi:", type_combo)
+        self._inputs["input_type"] = type_combo
+
     # ── Output Alanları ──────────────────────────────────────────────
     def _add_output_fields(self, form: QFormLayout):
         expr_edit = QLineEdit()

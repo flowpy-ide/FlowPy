@@ -44,33 +44,29 @@ class UndoManager(QObject):
         if len(self._undo_stack) > 50:
             self._undo_stack.pop(0)
 
-    def undo(self):
-        """Son durumu geri alır."""
-        if len(self._undo_stack) > 1:
-            self._is_undoing = True
-            
-            # Mevcut durumu redo stack'e at
-            current_state = self._undo_stack.pop()
-            self._redo_stack.append(current_state)
-            
-            # Bir önceki duruma dön
-            previous_state = self._undo_stack[-1]
-            data = json.loads(previous_state)
-            FlowSerializer.deserialize_from_dict(data, self.registry, self.scene)
-            
-            self._is_undoing = False
+    def undo(self) -> bool:
+        """Son durumu geri alır. Başarılıysa True döner."""
+        if len(self._undo_stack) <= 1:
+            return False
 
-    def redo(self):
-        """Geri alınan işlemi ileri sarar."""
-        if self._redo_stack:
-            self._is_undoing = True
-            
-            # Redo'dan alıp undo'ya ekle
-            next_state = self._redo_stack.pop()
-            self._undo_stack.append(next_state)
-            
-            # Durumu uygula
-            data = json.loads(next_state)
-            FlowSerializer.deserialize_from_dict(data, self.registry, self.scene)
-            
-            self._is_undoing = False
+        self._is_undoing = True
+        current_state = self._undo_stack.pop()
+        self._redo_stack.append(current_state)
+        previous_state = self._undo_stack[-1]
+        data = json.loads(previous_state)
+        FlowSerializer.deserialize_from_dict(data, self.registry, self.scene)
+        self._is_undoing = False
+        return True
+
+    def redo(self) -> bool:
+        """Geri alınan işlemi ileri sarar. Başarılıysa True döner."""
+        if not self._redo_stack:
+            return False
+
+        self._is_undoing = True
+        next_state = self._redo_stack.pop()
+        self._undo_stack.append(next_state)
+        data = json.loads(next_state)
+        FlowSerializer.deserialize_from_dict(data, self.registry, self.scene)
+        self._is_undoing = False
+        return True

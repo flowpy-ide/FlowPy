@@ -4,10 +4,11 @@
 # Port      : Düğümlerin giriş/çıkış bağlantı noktaları.
 # ──────────────────────────────────────────────────────────────────────
 
+import math
+
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsEllipseItem, QGraphicsDropShadowEffect
-from PyQt6.QtCore import QRectF, Qt, QPointF
-from PyQt6.QtGui import (QPainter, QColor, QPen, QBrush, QFont,
-                         QLinearGradient)
+from PyQt6.QtCore import QRectF, Qt, QPointF, QTimer
+from PyQt6.QtGui import (QPainter, QColor, QPen, QBrush, QFont, QRadialGradient)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -17,42 +18,45 @@ from PyQt6.QtGui import (QPainter, QColor, QPen, QBrush, QFont,
 class Port(QGraphicsEllipseItem):
     """Düğüm üzerindeki giriş veya çıkış bağlantı noktası."""
 
-    RADIUS = 6  # piksel
+    RADIUS = 6
 
     def __init__(self, parent_node, is_output: bool = False, label: str = ""):
         diameter = self.RADIUS * 2
         super().__init__(-self.RADIUS, -self.RADIUS, diameter, diameter,
                          parent_node)
         self.is_output = is_output
-        self.label = label  # Opsiyonel etiket (ör: "True", "False")
-
-        # Görsel ayarlar
-        self._base_color = QColor("#2ecc71") if is_output else QColor("#3498db")
-        self.setBrush(QBrush(self._base_color))
-        self.setPen(QPen(QColor("#2c3e50"), 1.5))
+        self.label = label
+        self._apply_theme_style(parent_node, is_output)
         self.setCursor(Qt.CursorShape.CrossCursor)
-
-        # Hover efekti için bayraklar
         self.setAcceptHoverEvents(True)
 
-    # ── Hover Efektleri ──────────────────────────────────────────────
+    def _apply_theme_style(self, parent_node, is_output: bool):
+        cls = type(parent_node)
+        theme = cls.NODE_THEME.get(
+            getattr(parent_node, "title", ""), cls.DEFAULT_THEME
+        )
+        glow = QColor(theme["glow"])
+        if is_output:
+            fill = QColor(theme["bg"])
+        else:
+            fill = QColor("#141414")
+        self._base_fill = fill
+        self._base_pen = glow
+        self.setBrush(QBrush(fill))
+        self.setPen(QPen(glow, 2))
 
     def hoverEnterEvent(self, event):
-        """Port üzerine gelindiğinde büyüt ve parlat."""
-        self.setBrush(QBrush(QColor("#f1c40f")))  # Altın sarısı
+        self.setBrush(QBrush(QColor("#f1c40f")))
         self.setScale(1.4)
         super().hoverEnterEvent(event)
 
     def hoverLeaveEvent(self, event):
-        """Port'tan ayrıldığında eski haline döndür."""
-        self.setBrush(QBrush(self._base_color))
+        self.setBrush(QBrush(self._base_fill))
+        self.setPen(QPen(self._base_pen, 2))
         self.setScale(1.0)
         super().hoverLeaveEvent(event)
 
-    # ── Fare Olayları (Bağlantı İçin) ────────────────────────────────
-
     def mousePressEvent(self, event):
-        """Porta tıklandığında bağlantı çizimini başlat."""
         if event.button() == Qt.MouseButton.LeftButton:
             scene = self.scene()
             if scene and hasattr(scene, 'start_connection'):
@@ -62,7 +66,6 @@ class Port(QGraphicsEllipseItem):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
-        """Sürükleme sırasında geçici çizgiyi güncelle."""
         scene = self.scene()
         if scene and hasattr(scene, 'update_connection'):
             scene.update_connection(event.scenePos())
@@ -71,7 +74,6 @@ class Port(QGraphicsEllipseItem):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        """Bırakıldığında bağlantıyı tamamla veya iptal et."""
         if event.button() == Qt.MouseButton.LeftButton:
             scene = self.scene()
             if scene and hasattr(scene, 'finish_connection'):
@@ -85,13 +87,12 @@ class Port(QGraphicsEllipseItem):
 #  BaseNode (Temel Düğüm)
 # ═══════════════════════════════════════════════════════════════════════
 
-# Düğüm tiplerine göre varsayılan özellikler
 _DEFAULT_PROPERTIES = {
     "Start":    {"variables": ""},
     "Process":  {"code": "", "description": ""},
     "Decision": {"condition": "", "description": ""},
     "While":    {"condition": "", "description": ""},
-    "Input":    {"variable": "USER_IN", "prompt": "Değer girin:"},
+    "Input":    {"variable": "USER_IN", "prompt": "Değer girin:", "input_type": "auto"},
     "Output":   {"expression": ""},
     "For":      {"variable": "i", "start": "0", "end": "10", "step": "1"},
     "Function": {"function_name": "my_func", "parameters": ""},
@@ -102,121 +103,128 @@ _DEFAULT_PROPERTIES = {
 class BaseNode(QGraphicsItem):
     """Sahneye yerleştirilebilen, sürüklenebilir temel düğüm."""
 
-    # Düğüm boyutları
     WIDTH = 160
     HEIGHT = 80
-    CORNER_RADIUS = 12
+    CORNER_RADIUS = 10
 
-    # Düğüm tiplerine göre renk paleti
-    COLOR_MAP = {
-        "Start":    ("#27ae60", "#2ecc71"),   # Yeşil
-        "Process":  ("#2980b9", "#3498db"),   # Mavi
-        "Decision": ("#8e44ad", "#9b59b6"),   # Mor
-        "While":    ("#d35400", "#e67e22"),   # Turuncu
-        "For":      ("#d35400", "#e67e22"),   # Turuncu (Döngü)
-        "Input":    ("#16a085", "#1abc9c"),   # Teal
-        "Output":   ("#c0392b", "#e74c3c"),   # Kırmızı
-        "Function": ("#2c3e50", "#34495e"),   # Koyu mavi
-        "Return":   ("#7f8c8d", "#95a5a6"),   # Gri
+    NODE_THEME = {
+        "Start":    {"bg": "#0d2e1a", "border": "#1a6b38", "text": "#4ade80", "glow": "#22c55e"},
+        "Process":  {"bg": "#0d1e3a", "border": "#1a3d6e", "text": "#60a5fa", "glow": "#3b82f6"},
+        "Decision": {"bg": "#1e1200", "border": "#3d2800", "text": "#fbbf24", "glow": "#f59e0b"},
+        "Input":    {"bg": "#0d2e1a", "border": "#1a6b38", "text": "#4ade80", "glow": "#22c55e"},
+        "Output":   {"bg": "#0d2e1a", "border": "#1a6b38", "text": "#4ade80", "glow": "#22c55e"},
+        "While":    {"bg": "#1a0d2e", "border": "#3a1a6e", "text": "#a78bfa", "glow": "#8b5cf6"},
+        "For":      {"bg": "#1a0d2e", "border": "#3a1a6e", "text": "#a78bfa", "glow": "#8b5cf6"},
+        "Function": {"bg": "#2e0d1e", "border": "#6e1a3a", "text": "#f472b6", "glow": "#ec4899"},
+        "Return":   {"bg": "#2e0d1e", "border": "#6e1a3a", "text": "#f472b6", "glow": "#ec4899"},
     }
-    DEFAULT_COLORS = ("#2c3e50", "#34495e")    # Koyu gri (bilinmeyen tipler)
+    DEFAULT_THEME = {
+        "bg": "#1e1e1e", "border": "#3a3a3a", "text": "#dcdcdc", "glow": "#4078c8",
+    }
 
     def __init__(self, title: str = "Process", node_id: str = ""):
         super().__init__()
         self.title = title
-        self.node_id = node_id          # Registry tarafından atanır
+        self.node_id = node_id
 
-        # ── Özellikler (properties) ──────────────────────────────────
         defaults = _DEFAULT_PROPERTIES.get(title, {})
-        self.properties: dict = dict(defaults)  # kopya
+        self.properties: dict = dict(defaults)
 
-        # ── Bayraklar ─────────────────────────────────────────────────
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges)
 
-        # ── Portlar ──────────────────────────────────────────────────
         self.input_ports: list[Port] = []
         self.output_ports: list[Port] = []
-
-        # Tip bazlı port yapısı
         self._create_ports()
-
-        # Bu düğüme bağlı tüm Edge nesneleri
         self.edges: list = []
 
-        # Çalıştırma sırasında vurgulama bayrağı
         self._highlight_active = False
+        self._pulse_opacity = 1.0
+        self._pulse_timer = QTimer()
+        self._pulse_timer.timeout.connect(self._pulse_tick)
+        self._pulse_phase = 0
 
-        # ── Özel stil özellikleri (Style Customizer) ─────────────────
-        self._custom_color: str | None = None        # hex renk veya None (varsayılan)
-        self._custom_border_style: int = 0           # 0=solid,1=dash,2=dot,3=none
-        self._border_pen_style = None                # Qt.PenStyle (None = auto)
+        self._custom_color: str | None = None
+        self._custom_border_style: int = 0
+        self._border_pen_style = None
         self._custom_line_style: int = 0
         self._line_pen_style = None
 
-        # Görsel Glow Efekti (Çalıştırma sırasında)
         self.glow_effect = QGraphicsDropShadowEffect()
         self.glow_effect.setBlurRadius(25)
-        self.glow_effect.setColor(QColor("#f39c12")) # Turuncu glow
+        self.glow_effect.setColor(QColor("#f39c12"))
         self.glow_effect.setOffset(0, 0)
         self.glow_effect.setEnabled(False)
         self.setGraphicsEffect(self.glow_effect)
 
+        self._refresh_cached_colors()
+
+    def _refresh_cached_colors(self):
+        """Tema renklerini önbelleğe alır (_custom_color öncelikli)."""
+        theme = self.NODE_THEME.get(self.title, self.DEFAULT_THEME)
+        if self._custom_color:
+            self._color_bg = QColor(self._custom_color)
+            self._color_border = self._color_bg.darker(130)
+            self._color_text = QColor("#ffffff")
+            self._color_glow = QColor(theme["glow"])
+        else:
+            self._color_bg = QColor(theme["bg"])
+            self._color_border = QColor(theme["border"])
+            self._color_text = QColor(theme["text"])
+            self._color_glow = QColor(theme["glow"])
+        self._color_text_dim = QColor(self._color_text)
+        self._color_text_dim.setAlpha(int(255 * 0.6))
+
     def set_highlight(self, active: bool):
-        """Çalıştırılan düğümü görsel olarak parlatır (glow)."""
         self._highlight_active = active
-        self.glow_effect.setEnabled(active)
+        self.glow_effect.setEnabled(False)
+        if active:
+            self._pulse_phase = 0
+            self._pulse_timer.start(50)
+        else:
+            self._pulse_timer.stop()
+            self._pulse_opacity = 1.0
         self.update()
 
-    # ── Port Yardımcıları ────────────────────────────────────────────
+    def _pulse_tick(self):
+        self._pulse_phase += 0.15
+        self._pulse_opacity = 0.6 + 0.4 * abs(math.sin(self._pulse_phase))
+        self.update()
 
     def _create_ports(self):
-        """Düğüm tipine göre portları oluşturur."""
         if self.title == "Decision":
-            # Decision: 1 giriş (sol), 2 çıkış (sağ üst ✓ / sağ alt ✗)
             inp = Port(self, is_output=False)
             inp.setPos(0, self.HEIGHT / 2)
             self.input_ports.append(inp)
 
             out_true = Port(self, is_output=True, label="True")
-            out_true._base_color = QColor("#2ecc71")  # Yeşil
-            out_true.setBrush(QBrush(out_true._base_color))
             out_true.setPos(self.WIDTH, self.HEIGHT * 0.3)
             self.output_ports.append(out_true)
 
             out_false = Port(self, is_output=True, label="False")
-            out_false._base_color = QColor("#e74c3c")  # Kırmızı
-            out_false.setBrush(QBrush(out_false._base_color))
             out_false.setPos(self.WIDTH, self.HEIGHT * 0.7)
             self.output_ports.append(out_false)
 
         elif self.title in ("While", "For"):
-            # Döngü: 1 giriş (sol), 2 çıkış (üst: 🔁 döngü gövdesi, alt: ➡ çıkış)
             inp = Port(self, is_output=False)
             inp.setPos(0, self.HEIGHT / 2)
             self.input_ports.append(inp)
 
             out_loop = Port(self, is_output=True, label="Loop")
-            out_loop._base_color = QColor("#e67e22")  # Turuncu
-            out_loop.setBrush(QBrush(out_loop._base_color))
             out_loop.setPos(self.WIDTH, self.HEIGHT * 0.3)
             self.output_ports.append(out_loop)
 
             out_exit = Port(self, is_output=True, label="Exit")
-            out_exit._base_color = QColor("#1abc9c")  # Turkuaz
-            out_exit.setBrush(QBrush(out_exit._base_color))
             out_exit.setPos(self.WIDTH, self.HEIGHT * 0.7)
             self.output_ports.append(out_exit)
 
         elif self.title == "Start":
-            # Start: sadece 1 çıkış (sağ)
             out = Port(self, is_output=True)
             out.setPos(self.WIDTH, self.HEIGHT / 2)
             self.output_ports.append(out)
 
         else:
-            # Process ve diğerleri: 1 giriş + 1 çıkış
             inp = Port(self, is_output=False)
             inp.setPos(0, self.HEIGHT / 2)
             self.input_ports.append(inp)
@@ -225,91 +233,96 @@ class BaseNode(QGraphicsItem):
             out.setPos(self.WIDTH, self.HEIGHT / 2)
             self.output_ports.append(out)
 
-    # ── QGraphicsItem Zorunlu Metotları ──────────────────────────────
-
     def boundingRect(self) -> QRectF:
-        """Düğümün tıklanabilir / çizilebilir sınır dikdörtgeni."""
         return QRectF(0, 0, self.WIDTH, self.HEIGHT)
 
+    def update(self, *args):
+        self._refresh_cached_colors()
+        super().update(*args)
+
     def paint(self, painter: QPainter, option, widget=None):
-        """Düğümün görsel çizimi — gradient, yuvarlak köşeler, başlık + özellik."""
         rect = self.boundingRect()
+        painter.setBrush(QBrush(self._color_bg))
 
-        # Renk paletini seç — özel renk varsa onu kullan
-        if self._custom_color:
-            base = QColor(self._custom_color)
-            dark_c = base.darker(140)
-            light_c = base
-        else:
-            dark, light = self.COLOR_MAP.get(self.title, self.DEFAULT_COLORS)
-            dark_c = QColor(dark)
-            light_c = QColor(light)
-
-        # ── Gradient arka plan ────────────────────────────────────────
-        gradient = QLinearGradient(0, 0, 0, self.HEIGHT)
-        gradient.setColorAt(0, light_c)
-        gradient.setColorAt(1, dark_c)
-        painter.setBrush(QBrush(gradient))
-
-        # ── Kenarlık ─────────────────────────────────────────────────
         if self._highlight_active:
-            painter.setPen(QPen(QColor("#f1c40f"), 3))
+            glow = QColor(self._color_glow)
+            glow.setAlphaF(self._pulse_opacity)
+            painter.setPen(QPen(glow, 2.5))
+            radial = QRadialGradient(
+                rect.center().x(), rect.center().y(),
+                max(rect.width(), rect.height()) * 0.75,
+            )
+            glow_fill = QColor(self._color_glow)
+            glow_fill.setAlpha(18)
+            radial.setColorAt(0, QColor(0, 0, 0, 0))
+            radial.setColorAt(1, glow_fill)
+            painter.setBrush(QBrush(radial))
+            painter.drawRoundedRect(rect, self.CORNER_RADIUS, self.CORNER_RADIUS)
+            painter.setBrush(QBrush(self._color_bg))
+            painter.setPen(QPen(glow, 2.5))
         elif self.isSelected():
-            painter.setPen(QPen(QColor("#f1c40f"), 3))   # Altın sarısı seçim
+            sel = QColor(self._color_glow)
+            sel.setAlpha(200)
+            painter.setPen(QPen(sel, 2.5))
         else:
-            border_style = (self._border_pen_style
-                            if self._border_pen_style is not None
-                            else Qt.PenStyle.SolidLine)
+            border_style = (
+                self._border_pen_style
+                if self._border_pen_style is not None
+                else Qt.PenStyle.SolidLine
+            )
             if border_style == Qt.PenStyle.NoPen:
                 painter.setPen(Qt.PenStyle.NoPen)
             else:
-                painter.setPen(QPen(QColor("#2c3e50"), 1.5, border_style))
+                painter.setPen(QPen(self._color_border, 1.5, border_style))
 
         painter.drawRoundedRect(rect, self.CORNER_RADIUS, self.CORNER_RADIUS)
 
-        # ── Başlık Metni (üst yarı) ─────────────────────────────────
         title_rect = QRectF(0, 4, self.WIDTH, self.HEIGHT / 2)
         font = QFont("Segoe UI", 10, QFont.Weight.Bold)
         painter.setFont(font)
-        painter.setPen(QPen(Qt.GlobalColor.white))
+        painter.setPen(QPen(self._color_text))
         painter.drawText(title_rect, Qt.AlignmentFlag.AlignCenter, self.title)
 
-        # ── Özellik Özet Metni (alt yarı) ────────────────────────────
         summary = self._get_property_summary()
         if summary:
             summary_rect = QRectF(8, self.HEIGHT / 2 - 2, self.WIDTH - 16, self.HEIGHT / 2)
             small_font = QFont("Segoe UI", 7)
             painter.setFont(small_font)
-            painter.setPen(QPen(QColor("#ecf0f1")))
-
-            # Metni sığdırmak için kısalt
+            painter.setPen(QPen(self._color_text_dim))
             metrics = painter.fontMetrics()
-            elided = metrics.elidedText(summary, Qt.TextElideMode.ElideRight,
-                                         int(summary_rect.width()))
+            elided = metrics.elidedText(
+                summary, Qt.TextElideMode.ElideRight, int(summary_rect.width())
+            )
             painter.drawText(summary_rect, Qt.AlignmentFlag.AlignCenter, elided)
 
-        # ── Decision / While port etiketleri ──────────────────────────
         if self.title == "Decision":
             label_font = QFont("Segoe UI", 7, QFont.Weight.Bold)
             painter.setFont(label_font)
-            painter.setPen(QPen(QColor("#2ecc71")))
-            painter.drawText(QRectF(self.WIDTH - 30, self.HEIGHT * 0.3 - 10, 25, 12),
-                             Qt.AlignmentFlag.AlignRight, "✓")
-            painter.setPen(QPen(QColor("#e74c3c")))
-            painter.drawText(QRectF(self.WIDTH - 30, self.HEIGHT * 0.7 - 2, 25, 12),
-                             Qt.AlignmentFlag.AlignRight, "✗")
+            painter.setPen(QPen(QColor("#4ade80")))
+            painter.drawText(
+                QRectF(self.WIDTH - 30, self.HEIGHT * 0.3 - 10, 25, 12),
+                Qt.AlignmentFlag.AlignRight, "✓",
+            )
+            painter.setPen(QPen(QColor("#f59e0b")))
+            painter.drawText(
+                QRectF(self.WIDTH - 30, self.HEIGHT * 0.7 - 2, 25, 12),
+                Qt.AlignmentFlag.AlignRight, "✗",
+            )
         elif self.title == "While":
             label_font = QFont("Segoe UI", 7, QFont.Weight.Bold)
             painter.setFont(label_font)
-            painter.setPen(QPen(QColor("#e67e22")))
-            painter.drawText(QRectF(self.WIDTH - 30, self.HEIGHT * 0.3 - 10, 25, 12),
-                             Qt.AlignmentFlag.AlignRight, "🔁")
-            painter.setPen(QPen(QColor("#1abc9c")))
-            painter.drawText(QRectF(self.WIDTH - 30, self.HEIGHT * 0.7 - 2, 25, 12),
-                             Qt.AlignmentFlag.AlignRight, "➡")
+            painter.setPen(QPen(QColor("#a78bfa")))
+            painter.drawText(
+                QRectF(self.WIDTH - 30, self.HEIGHT * 0.3 - 10, 25, 12),
+                Qt.AlignmentFlag.AlignRight, "🔁",
+            )
+            painter.setPen(QPen(QColor("#8b5cf6")))
+            painter.drawText(
+                QRectF(self.WIDTH - 30, self.HEIGHT * 0.7 - 2, 25, 12),
+                Qt.AlignmentFlag.AlignRight, "➡",
+            )
 
     def _get_property_summary(self) -> str:
-        """Düğüm tipine göre kısa özet metni döndürür."""
         if self.title == "Decision":
             cond = self.properties.get("condition", "")
             return f"if {cond}" if cond else "⚙ Çift tıkla…"
@@ -319,8 +332,7 @@ class BaseNode(QGraphicsItem):
         elif self.title == "Process":
             code = self.properties.get("code", "")
             if code:
-                first_line = code.strip().split("\n")[0]
-                return first_line
+                return code.strip().split("\n")[0]
             return "⚙ Çift tıkla…"
         elif self.title == "Start":
             vars_text = self.properties.get("variables", "")
@@ -330,44 +342,30 @@ class BaseNode(QGraphicsItem):
             return "▶ Başlangıç"
         return ""
 
-    # ── Çift Tıklama → Düzenleme Diyaloğu ────────────────────────────
-
     def mouseDoubleClickEvent(self, event):
-        """Düğüme çift tıklandığında düzenleme diyaloğunu açar."""
         from views.node_editor_dialog import NodeEditorDialog
 
         dialog = NodeEditorDialog(self)
         if dialog.exec():
-            # Kullanıcı OK'a bastı → özellikleri güncelle
             new_props = dialog.get_properties()
             self.properties.update(new_props)
-            self.update()  # Yeniden çizim tetikle
-            
+            self.update()
             if self.scene() and hasattr(self.scene(), "history_changed"):
                 self.scene().history_changed.emit()
 
     def mouseReleaseEvent(self, event):
-        """Sürükleme bırakıldığında durumu kaydeder."""
         super().mouseReleaseEvent(event)
         if self.scene() and hasattr(self.scene(), "history_changed"):
             self.scene().history_changed.emit()
 
-    # ── Konum Değişikliği → Grid Snapping & Edge Güncelleme ──────────
-
     def itemChange(self, change, value):
-        """Düğüm sürüklendiğinde ızgaraya hizalar ve bağlı okları günceller."""
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
-            # Grid Snapping (Izgaraya Hizalama)
             grid_size = 20
             new_pos = value
             x = round(new_pos.x() / grid_size) * grid_size
             y = round(new_pos.y() / grid_size) * grid_size
             snapped_pos = QPointF(x, y)
-
-            # Edge'leri güncelle
             for edge in self.edges:
                 edge.update_path()
-                
             return snapped_pos
-            
         return super().itemChange(change, value)
