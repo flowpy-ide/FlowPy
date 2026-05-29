@@ -6,7 +6,7 @@
 from PyQt6.QtWidgets import QWidget, QLabel, QVBoxLayout
 from PyQt6.QtCore import Qt, QTimer, QPoint
 
-from core.node_docs import NODE_DOCS
+from core.i18n_node_docs import get_node_doc
 
 
 class NodeDocTooltip(QWidget):
@@ -15,6 +15,8 @@ class NodeDocTooltip(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent, Qt.WindowType.ToolTip | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # Port tıklamalarını engellemesin — fare olayları alttaki canvas'a geçsin
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setStyleSheet("""
             QWidget#tooltipRoot {
                 background: #1e2030;
@@ -63,12 +65,13 @@ class NodeDocTooltip(QWidget):
         inner.addWidget(self.tip_label)
 
         self.setMaximumWidth(280)
+        self.setMinimumSize(1, 1)
         self._hide_timer = QTimer()
         self._hide_timer.setSingleShot(True)
         self._hide_timer.timeout.connect(self.hide)
 
-    def show_for_node(self, node_title: str, global_pos: QPoint):
-        doc = NODE_DOCS.get(node_title)
+    def show_for_node(self, node_title: str, global_pos: QPoint, placement: str = "above"):
+        doc = get_node_doc(node_title)
         if not doc:
             return
         self.title_label.setText(doc["title"])
@@ -76,7 +79,16 @@ class NodeDocTooltip(QWidget):
         self.example_label.setText(doc.get("example", ""))
         self.tip_label.setText(f"💡 {doc.get('tip', '')}")
         self.adjustSize()
-        self.move(global_pos + QPoint(15, 10))
+        hint = self.sizeHint()
+        self.resize(hint)
+
+        if placement == "above":
+            x = global_pos.x() - hint.width() // 2
+            y = global_pos.y() - hint.height() - 10
+        else:
+            x = global_pos.x() + 15
+            y = global_pos.y() + 10
+        self.move(x, y)
         self.show()
         self._hide_timer.stop()
 

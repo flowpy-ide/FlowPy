@@ -12,6 +12,7 @@ from PyQt6.QtGui import QPen, QColor, QPainterPath, QBrush, QPainter, QFont
 from models.node import BaseNode, Port
 from models.edge import Edge
 from core.registry import NodeRegistry
+from core.i18n_nodes import resolve_canonical_node_title
 
 # QListWidget / QTreeWidget'in kullandığı varsayılan sürükleme formatı
 _LIST_MIME = "application/x-qabstractitemmodeldatalist"
@@ -177,8 +178,7 @@ class FlowScene(QGraphicsScene):
     def __init__(self, registry: NodeRegistry, parent=None):
         super().__init__(parent)
         self.registry = registry
-        # Varsayılan sahne boyutu
-        self.setSceneRect(-2000, -2000, 4000, 4000)
+        self.setSceneRect(-3000, -500, 6000, 4000)
 
         # ── Koyu Grid Arkaplan ───────────────────────────────────────
         self.setBackgroundBrush(QBrush(QColor("#1e1e1e")))
@@ -189,6 +189,14 @@ class FlowScene(QGraphicsScene):
         self._source_port = None       # Başlangıç portu
         self._temp_edge = None         # Geçici Bezier çizgisi
         self._clipboard: list[dict] = []
+
+    def fit_scene_rect_to_contents(self, margin: float = 500.0):
+        """Tüm öğelere göre sahne dikdörtgenini günceller (kaydırma alanı)."""
+        rect = self.itemsBoundingRect()
+        if rect.isNull() or rect.isEmpty():
+            return
+        padded = rect.adjusted(-margin, -margin, margin, margin)
+        self.setSceneRect(padded)
 
     # ══════════════════════════════════════════════════════════════════
     #  Bağlantı (Edge) Oluşturma — Port tıklama ile
@@ -331,14 +339,7 @@ class FlowScene(QGraphicsScene):
 
     @staticmethod
     def _extract_text(mime_data) -> str:
-        """Mime verisinden düğüm adını çıkarır.
-        
-        QTreeWidget'tan gelen sürüklemede UserRole (temiz isim) tercih edilir.
-        QListWidget'tan gelen sürüklemede DisplayRole kullanılır.
-        """
-        if mime_data.hasText():
-            return mime_data.text().strip()
-
+        """Mime verisinden kanonik düğüm adını çıkarır (UserRole öncelikli)."""
         if mime_data.hasFormat(_LIST_MIME):
             data = mime_data.data(_LIST_MIME)
             stream = QDataStream(data, QIODevice.OpenModeFlag.ReadOnly)
@@ -358,10 +359,13 @@ class FlowScene(QGraphicsScene):
                     elif role == Qt.ItemDataRole.DisplayRole:
                         t = str(value).strip()
                         if t:
-                            # Strip leading whitespace + icon prefix (e.g. "  ▶  Start" → "Start")
-                            parts = t.rsplit(None, 1)
-                            display_text = parts[-1] if parts else t
-            return user_role_text or display_text
+                            display_text = t.lstrip()
+            raw = user_role_text or display_text
+            if raw:
+                return resolve_canonical_node_title(raw)
+
+        if mime_data.hasText():
+            return resolve_canonical_node_title(mime_data.text().strip())
         return ""
 
     def dragEnterEvent(self, event):

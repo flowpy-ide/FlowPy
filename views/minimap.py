@@ -8,6 +8,7 @@ from PyQt6.QtCore import Qt, QRectF, QPointF, QTimer
 from PyQt6.QtGui import QPainter, QColor, QPen, QBrush
 
 from models.node import BaseNode
+from core.node_visuals import build_shape_path, get_node_shape
 
 
 class FlowMinimap(QWidget):
@@ -64,9 +65,10 @@ class FlowMinimap(QWidget):
                 mx, my = to_mini(pos.x() + r.x(), pos.y() + r.y())
                 mw = max(r.width() * scale, 4)
                 mh = max(r.height() * scale, 3)
+                mini_rect = QRectF(mx, my, mw, mh)
                 painter.setPen(QPen(QColor(theme["border"]), 0.5))
                 painter.setBrush(QBrush(QColor(theme["bg"])))
-                painter.drawRoundedRect(QRectF(mx, my, mw, mh), 1, 1)
+                painter.drawPath(build_shape_path(get_node_shape(item.title), mini_rect, 1))
 
         vp_rect = self.view.viewport().rect()
         tl = self.view.mapToScene(vp_rect.topLeft())

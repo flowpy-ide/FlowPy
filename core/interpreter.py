@@ -6,6 +6,7 @@
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer, QCoreApplication
 from core.registry import NodeRegistry
 from core.validator import FlowValidator
+from core.i18n_nodes import resolve_canonical_node_title
 
 
 class Interpreter(QObject):
@@ -42,6 +43,7 @@ class Interpreter(QObject):
         self.registry = registry
         self._scope: dict = {}
         self._for_states: dict = {}
+        self._loop_stack: list = []
         self._current_node = None
         self._current_step = 0
         self._is_active = False
@@ -172,6 +174,7 @@ class Interpreter(QObject):
 
         self._scope = {}
         self._for_states = {}
+        self._loop_stack = []
         self.scope_changed.emit(self._scope)
         self._current_step = 1
         self._current_node = start_node
@@ -207,7 +210,7 @@ class Interpreter(QObject):
 
         node = self._current_node
         step = self._current_step
-        title = getattr(node, "title", "?")
+        title = resolve_canonical_node_title(getattr(node, "title", "?"))
         node_id = getattr(node, "node_id", "?")
         short_id = node_id[:8] if len(node_id) >= 8 else node_id
 
@@ -284,7 +287,12 @@ class Interpreter(QObject):
             else:
                 self._log_detail("       ⚠ Döngü koşulu yok, atlanıyor (Exit).")
                 result_bool = False
-            port_index = 0 if result_bool else 1
+            if result_bool:
+                self._push_loop(node)
+                port_index = 0
+            else:
+                self._pop_loop(node)
+                port_index = 1
             next_node, edge = self._get_next_node(node, port_index)
 
         elif title == "Input":
@@ -357,10 +365,12 @@ class Interpreter(QObject):
                 condition_met = (curr < e) if stp > 0 else (curr > e)
                 if condition_met:
                     self._log_detail(f"       Döngü adımı: {var_name} = {curr} (Loop)")
+                    self._push_loop(node)
                     self._for_states[node_id] += stp
                     next_node, edge = self._get_next_node(node, 0)
                 else:
                     self._log_detail("       Döngü bitti (Exit).")
+                    self._pop_loop(node)
                     del self._for_states[node_id]
                     next_node, edge = self._get_next_node(node, 1)
             except Exception as ex:
@@ -386,6 +396,338 @@ class Interpreter(QObject):
                     self._log_detail(f"       ✗ Return Hatası: {e}")
             next_node, edge = self._get_next_node(node, 0)
 
+        elif title == "Variable":
+            p = node.properties
+            name, value, typ = p.get("name", "x"), p.get("value", "0"), p.get("type", "auto")
+            self._log_step(step, f"VARIABLE {name}{self._meta_suffix(p)} (ID: {short_id})", "process")
+            try:
+                if typ in ("int", "float", "str", "bool", "list"):
+                    self._scope[name] = eval(f"{typ}({value})", {"__builtins__": __builtins__}, self._scope)
+                else:
+                    self._scope[name] = eval(value, {"__builtins__": __builtins__}, self._scope)
+                self._log_detail(f"       ✔ {name} = {repr(self._scope[name])}")
+            except Exception as e:
+                self._log_detail(f"       ✗ Hata: {e}")
+            next_node, edge = self._get_next_node(node, 0)
+
+        elif title == "Math":
+            p = node.properties
+            r, a, op, b = p.get("result", "r"), p.get("operand_a", "a"), p.get("operator", "+"), p.get("operand_b", "b")
+            self._log_step(step, f"MATH {r}{self._meta_suffix(p)} (ID: {short_id})", "process")
+            try:
+                self._scope[r] = eval(f"{a} {op} {b}", {"__builtins__": __builtins__}, self._scope)
+                self._log_detail(f"       ✔ {r} = {self._scope[r]}")
+            except Exception as e:
+                self._log_detail(f"       ✗ Hata: {e}")
+            next_node, edge = self._get_next_node(node, 0)
+
+        elif title == "Print":
+            expr = node.properties.get("expression", "").strip()
+            self._log_step(step, f"PRINT{self._meta_suffix(node.properties)} (ID: {short_id})", "output")
+            if expr:
+                try:
+                    res = eval(expr, {"__builtins__": __builtins__}, self._scope)
+                    self._log_detail(f"       ► YAZDIR: {res}")
+                except Exception as e:
+                    self._log_detail(f"       ✗ Hata: {e}")
+            next_node, edge = self._get_next_node(node, 0)
+
+        elif title == "String Operation":
+            p = node.properties
+            var, op, args, res = p.get("variable", "s"), p.get("operation", "upper"), p.get("args", ""), p.get("result", "result")
+            self._log_step(step, f"STRING {op}{self._meta_suffix(p)} (ID: {short_id})", "process")
+            try:
+                call = f"{var}.{op}({args})" if args else f"{var}.{op}()"
+                self._scope[res] = eval(call, {"__builtins__": __builtins__}, self._scope)
+                self._log_detail(f"       ✔ {res} = {repr(self._scope[res])}")
+            except Exception as e:
+                self._log_detail(f"       ✗ Hata: {e}")
+            next_node, edge = self._get_next_node(node, 0)
+
+        elif title == "Type Cast":
+            p = node.properties
+            src, tgt, res = p.get("source", "x"), p.get("target", "int"), p.get("result", "result")
+            self._log_step(step, f"CAST {tgt}{self._meta_suffix(p)} (ID: {short_id})", "process")
+            try:
+                val = eval(src, {"__builtins__": __builtins__}, self._scope)
+                caster = {"int": int, "float": float, "str": str, "bool": bool, "list": list}.get(tgt, int)
+                self._scope[res] = caster(val)
+                self._log_detail(f"       ✔ {res} = {repr(self._scope[res])}")
+            except Exception as e:
+                self._log_detail(f"       ✗ Hata: {e}")
+            next_node, edge = self._get_next_node(node, 0)
+
+        elif title == "List Operation":
+            p = node.properties
+            lv, op, args, res = p.get("list_var", "liste"), p.get("operation", "append"), p.get("args", ""), p.get("result", "")
+            self._log_step(step, f"LIST {op}{self._meta_suffix(p)} (ID: {short_id})", "process")
+            try:
+                lst = eval(lv, {"__builtins__": __builtins__}, self._scope)
+                scope = {"__builtins__": __builtins__}, self._scope
+                if op == "len":
+                    self._scope[res] = len(lst)
+                elif op in ("sort", "reverse"):
+                    getattr(lst, op)()
+                    if res:
+                        self._scope[res] = lst
+                elif op in ("append", "insert", "remove") and args.strip():
+                    val = eval(args.strip(), scope["__builtins__"], scope)
+                    if op == "append":
+                        lst.append(val)
+                    elif op == "insert":
+                        getattr(lst, op)(0, val)
+                    else:
+                        lst.remove(val)
+                elif args.strip() and "," in args:
+                    parts = [eval(p.strip(), scope["__builtins__"], scope) for p in args.split(",") if p.strip()]
+                    getattr(lst, op)(*parts)
+                elif args.strip():
+                    getattr(lst, op)(eval(args.strip(), scope["__builtins__"], scope))
+                else:
+                    getattr(lst, op)()
+                self._log_detail(f"       ✔ Liste işlemi: {op} → len={len(lst)}")
+            except Exception as e:
+                self._log_detail(f"       ✗ Hata: {e}")
+            next_node, edge = self._get_next_node(node, 0)
+
+        elif title == "If Elif Else":
+            p = node.properties
+            c_if, c_elif = p.get("condition_if", "").strip(), p.get("condition_elif", "").strip()
+            self._log_step(step, f"IF/ELIF/ELSE{self._meta_suffix(p)} (ID: {short_id})", "decision")
+            port_index = 2
+            try:
+                if c_if and bool(eval(c_if, {"__builtins__": __builtins__}, self._scope)):
+                    port_index = 0
+                    self._log_detail("       → if dalı")
+                elif c_elif and bool(eval(c_elif, {"__builtins__": __builtins__}, self._scope)):
+                    port_index = 1
+                    self._log_detail("       → elif dalı")
+                else:
+                    self._log_detail("       → else dalı")
+            except Exception as e:
+                self._log_detail(f"       ✗ Hata: {e}")
+            next_node, edge = self._get_next_node(node, port_index)
+
+        elif title == "Break":
+            p = node.properties
+            self._log_step(step, f"BREAK{self._meta_suffix(p)} (ID: {short_id})", "while")
+            next_node, edge = self._handle_break(node)
+
+        elif title == "Continue":
+            p = node.properties
+            self._log_step(step, f"CONTINUE{self._meta_suffix(p)} (ID: {short_id})", "while")
+            next_node, edge = self._handle_continue(node)
+
+        elif title == "Try Except":
+            p = node.properties
+            self._log_step(step, f"TRY/EXCEPT{self._meta_suffix(p)} (ID: {short_id})", "process")
+            self._log_detail("       → try gövdesi (port 0)")
+            next_node, edge = self._get_next_node(node, 0)
+
+        elif title == "Switch Match":
+            p = node.properties
+            var = p.get("variable", "x").strip()
+            cases = [c.strip() for c in p.get("cases", "1,2,default").split(",") if c.strip()]
+            self._log_step(step, f"SWITCH {var}{self._meta_suffix(p)} (ID: {short_id})", "decision")
+            port_index = max(len(cases) - 1, 0)
+            try:
+                val = eval(var, {"__builtins__": __builtins__}, self._scope)
+                for i, case in enumerate(cases):
+                    if case == "default":
+                        port_index = i
+                        break
+                    try:
+                        case_val = eval(case, {"__builtins__": __builtins__}, self._scope)
+                    except Exception:
+                        case_val = case
+                    if val == case_val:
+                        port_index = i
+                        break
+                self._log_detail(f"       → port {port_index} ({cases[port_index] if port_index < len(cases) else '?'})")
+            except Exception as e:
+                self._log_detail(f"       ✗ Hata: {e}")
+            next_node, edge = self._get_next_node(node, port_index)
+
+        elif title == "Swap":
+            p = node.properties
+            a, b = p.get("var_a", "a"), p.get("var_b", "b")
+            self._log_step(step, f"SWAP{self._meta_suffix(p)} (ID: {short_id})", "process")
+            try:
+                exec(
+                    f"{a}, {b} = {b}, {a}",
+                    {"__builtins__": __builtins__},
+                    self._scope,
+                )
+                self._log_detail(f"       ✔ {a} ↔ {b}")
+            except Exception as e:
+                self._log_detail(f"       ✗ Hata: {e}")
+            next_node, edge = self._get_next_node(node, 0)
+
+        elif title == "Accumulate":
+            p = node.properties
+            acc, op, val = p.get("accumulator", "toplam"), p.get("operation", "+="), p.get("value", "x")
+            self._log_step(step, f"ACCUMULATE{self._meta_suffix(p)} (ID: {short_id})", "process")
+            try:
+                exec(f"{acc} {op} {val}", {"__builtins__": __builtins__}, self._scope)
+                self._log_detail(f"       ✔ {acc} = {self._scope.get(acc)}")
+            except Exception as e:
+                self._log_detail(f"       ✗ Hata: {e}")
+            next_node, edge = self._get_next_node(node, 0)
+
+        elif title == "Sort":
+            p = node.properties
+            lv = p.get("list_var", "liste")
+            rev = p.get("reverse", "False")
+            key = p.get("key", "").strip()
+            self._log_step(step, f"SORT{self._meta_suffix(p)} (ID: {short_id})", "process")
+            try:
+                lst = eval(lv, {"__builtins__": __builtins__}, self._scope)
+                kwargs = {"reverse": bool(eval(rev, {"__builtins__": __builtins__}, self._scope))}
+                if key:
+                    kwargs["key"] = eval(f"lambda x: {key}", {"__builtins__": __builtins__}, self._scope)
+                lst.sort(**kwargs)
+                self._log_detail("       ✔ Liste sıralandı")
+            except Exception as e:
+                self._log_detail(f"       ✗ Hata: {e}")
+            next_node, edge = self._get_next_node(node, 0)
+
+        elif title == "Search":
+            p = node.properties
+            lv, tgt, res = p.get("list_var", "liste"), p.get("target", "hedef"), p.get("result", "index")
+            self._log_step(step, f"SEARCH{self._meta_suffix(p)} (ID: {short_id})", "process")
+            try:
+                lst = eval(lv, {"__builtins__": __builtins__}, self._scope)
+                target = eval(tgt, {"__builtins__": __builtins__}, self._scope)
+                self._scope[res] = lst.index(target) if target in lst else -1
+                self._log_detail(f"       ✔ {res} = {self._scope[res]}")
+            except Exception as e:
+                self._log_detail(f"       ✗ Hata: {e}")
+            next_node, edge = self._get_next_node(node, 0)
+
+        elif title == "Random":
+            p = node.properties
+            import random
+            op, args, res = p.get("operation", "randint"), p.get("args", "1,100"), p.get("result", "r")
+            self._log_step(step, f"RANDOM{self._meta_suffix(p)} (ID: {short_id})", "process")
+            try:
+                self._scope[res] = eval(f"random.{op}({args})", {"random": random, "__builtins__": __builtins__}, self._scope)
+                self._log_detail(f"       ✔ {res} = {self._scope[res]}")
+            except Exception as e:
+                self._log_detail(f"       ✗ Hata: {e}")
+            next_node, edge = self._get_next_node(node, 0)
+
+        elif title == "Lambda":
+            p = node.properties
+            name, params, body = p.get("name", "f"), p.get("params", "x"), p.get("body", "x")
+            self._log_step(step, f"LAMBDA {name}{self._meta_suffix(p)} (ID: {short_id})", "process")
+            try:
+                self._scope[name] = eval(f"lambda {params}: {body}", {"__builtins__": __builtins__}, self._scope)
+                self._log_detail(f"       ✔ {name} tanımlandı")
+            except Exception as e:
+                self._log_detail(f"       ✗ Hata: {e}")
+            next_node, edge = self._get_next_node(node, 0)
+
+        elif title == "List Comprehension":
+            p = node.properties
+            res, expr, var, it, cond = (
+                p.get("result", "s"), p.get("expression", "x"), p.get("variable", "x"),
+                p.get("iterable", "liste"), p.get("condition", ""),
+            )
+            self._log_step(step, f"LIST COMP{self._meta_suffix(p)} (ID: {short_id})", "process")
+            try:
+                if cond:
+                    self._scope[res] = eval(
+                        f"[{expr} for {var} in {it} if {cond}]",
+                        {"__builtins__": __builtins__}, self._scope,
+                    )
+                else:
+                    self._scope[res] = eval(
+                        f"[{expr} for {var} in {it}]",
+                        {"__builtins__": __builtins__}, self._scope,
+                    )
+                self._log_detail(f"       ✔ {res} = {self._scope[res]}")
+            except Exception as e:
+                self._log_detail(f"       ✗ Hata: {e}")
+            next_node, edge = self._get_next_node(node, 0)
+
+        elif title == "Assert":
+            p = node.properties
+            cond, msg = p.get("condition", "True"), p.get("message", "Assertion failed")
+            self._log_step(step, f"ASSERT{self._meta_suffix(p)} (ID: {short_id})", "decision")
+            port_index = 0
+            try:
+                if not bool(eval(cond, {"__builtins__": __builtins__}, self._scope)):
+                    raise AssertionError(msg)
+                self._log_detail("       ✔ Assert geçti")
+            except AssertionError as e:
+                self._log_detail(f"       ✗ Assert başarısız: {e}")
+                port_index = 1
+            except Exception as e:
+                self._log_detail(f"       ✗ Hata: {e}")
+                port_index = 1
+            next_node, edge = self._get_next_node(node, port_index)
+
+        elif title == "Import":
+            p = node.properties
+            mod, alias, frm = p.get("module", "math"), p.get("alias", ""), p.get("from_import", "")
+            self._log_step(step, f"IMPORT {mod}{self._meta_suffix(p)} (ID: {short_id})", "process")
+            try:
+                if frm:
+                    exec(f"from {mod} import {frm}", {"__builtins__": __builtins__}, self._scope)
+                elif alias:
+                    exec(f"import {mod} as {alias}", {"__builtins__": __builtins__}, self._scope)
+                else:
+                    exec(f"import {mod}", {"__builtins__": __builtins__}, self._scope)
+                self._log_detail("       ✔ Import tamam")
+            except Exception as e:
+                self._log_detail(f"       ✗ Hata: {e}")
+            next_node, edge = self._get_next_node(node, 0)
+
+        elif title == "File Read":
+            p = node.properties
+            fp, var, mode = p.get("filepath", "dosya.txt"), p.get("variable", "icerik"), p.get("mode", "all")
+            self._log_step(step, f"FILE READ{self._meta_suffix(p)} (ID: {short_id})", "process")
+            try:
+                read_fn = {"all": "read", "lines": "readlines", "line": "readline"}.get(mode, "read")
+                with open(fp, "r", encoding="utf-8") as f:
+                    self._scope[var] = getattr(f, read_fn)()
+                self._log_detail(f"       ✔ {var} okundu")
+            except Exception as e:
+                self._log_detail(f"       ✗ Hata: {e}")
+            next_node, edge = self._get_next_node(node, 0)
+
+        elif title == "File Write":
+            p = node.properties
+            fp, expr, mode = p.get("filepath", "cikti.txt"), p.get("expression", ""), p.get("mode", "w")
+            self._log_step(step, f"FILE WRITE{self._meta_suffix(p)} (ID: {short_id})", "process")
+            try:
+                val = eval(expr, {"__builtins__": __builtins__}, self._scope) if expr else ""
+                with open(fp, mode, encoding="utf-8") as f:
+                    f.write(str(val))
+                self._log_detail("       ✔ Dosyaya yazıldı")
+            except Exception as e:
+                self._log_detail(f"       ✗ Hata: {e}")
+            next_node, edge = self._get_next_node(node, 0)
+
+        elif title == "Delay":
+            import time
+            secs = float(eval(node.properties.get("seconds", "1"), {"__builtins__": __builtins__}, self._scope))
+            self._log_step(step, f"DELAY {secs}s{self._meta_suffix(node.properties)} (ID: {short_id})", "info")
+            time.sleep(min(max(secs, 0), 10))
+            QCoreApplication.processEvents()
+            next_node, edge = self._get_next_node(node, 0)
+
+        elif title == "Stop":
+            msg = node.properties.get("message", "").strip()
+            self._log_step(step, f"STOP{self._meta_suffix(node.properties)} (ID: {short_id})", "stop")
+            if msg:
+                self._log_detail(f"       ► {msg}")
+            next_node, edge = None, None
+
+        elif title in ("Comment", "Group"):
+            self._log_step(step, f"{title} (atlandı) (ID: {short_id})", "info")
+            next_node, edge = self._get_next_node(node, 0)
+
         else:
             self._log_step(step, f"{title} (ID: {short_id})", "info")
             next_node, edge = self._get_next_node(node, 0)
@@ -400,6 +742,44 @@ class Interpreter(QObject):
             self._finish_flow()
         elif self._is_paused:
             self.highlight_node.emit(self._current_node)
+
+    def _meta_suffix(self, props: dict) -> str:
+        tag = props.get("tag", "").strip()
+        desc = props.get("description", "").strip()
+        if tag and desc:
+            return f" [{tag}: {desc}]"
+        if tag:
+            return f" [{tag}]"
+        if desc:
+            return f" ({desc})"
+        return ""
+
+    def _push_loop(self, node):
+        if not self._loop_stack or self._loop_stack[-1].node_id != node.node_id:
+            self._loop_stack.append(node)
+
+    def _pop_loop(self, node):
+        if self._loop_stack and self._loop_stack[-1].node_id == node.node_id:
+            self._loop_stack.pop()
+
+    def _handle_break(self, node) -> tuple:
+        if not self._loop_stack:
+            self._log_detail("       ⚠ break döngü dışında — normal akışa devam.")
+            return self._get_next_node(node, 0)
+        loop = self._loop_stack[-1]
+        self._pop_loop(loop)
+        if loop.title == "For" and loop.node_id in self._for_states:
+            del self._for_states[loop.node_id]
+        self._log_detail(f"       ✔ Döngüden çıkıldı ({loop.title})")
+        return self._get_next_node(loop, 1)
+
+    def _handle_continue(self, node) -> tuple:
+        if not self._loop_stack:
+            self._log_detail("       ⚠ continue döngü dışında — normal akışa devam.")
+            return self._get_next_node(node, 0)
+        loop = self._loop_stack[-1]
+        self._log_detail(f"       ✔ Sonraki tur ({loop.title})")
+        return loop, None
 
     def _get_next_node(self, current_node, port_index: int = 0) -> tuple:
         if port_index >= len(current_node.output_ports):

@@ -80,6 +80,7 @@ class FlowSerializer:
             node = BaseNode(title=node_data["title"])
             node.node_id = node_data["id"]
             node.properties = node_data.get("properties", {})
+            node.normalize_title_and_properties()
 
             registry.nodes[node.node_id] = node
             scene.addItem(node)
@@ -106,7 +107,11 @@ class FlowSerializer:
                                 source_port=src_port,
                                 dest_port=dst_port)
                     scene.addItem(edge)
+                    edge.update_path()
                     registry.add_edge(src_id, dst_id)
+
+        if hasattr(scene, "fit_scene_rect_to_contents"):
+            scene.fit_scene_rect_to_contents()
 
         return len(data.get("nodes", [])), len(data.get("edges", []))
 

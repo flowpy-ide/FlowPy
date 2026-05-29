@@ -3,8 +3,38 @@
 # Hazır flow şablonları ve yükleme yardımcıları.
 # ──────────────────────────────────────────────────────────────────────
 
+import os
+
 from models.node import BaseNode
 from models.edge import Edge
+
+_PKG_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CREATED_FLOWS_DIR = os.path.join(_PKG_DIR, "created_flows")
+
+
+def list_created_flow_files() -> list[str]:
+    """created_flows/ altındaki .flowpy dosya adlarını döndürür."""
+    if not os.path.isdir(CREATED_FLOWS_DIR):
+        return []
+    return sorted(
+        f for f in os.listdir(CREATED_FLOWS_DIR)
+        if f.endswith(".flowpy")
+    )
+
+
+def load_created_flow(filename: str, registry, scene) -> bool:
+    """created_flows içinden bir .flowpy dosyası yükler."""
+    from core.serializer import FlowSerializer
+    path = os.path.join(CREATED_FLOWS_DIR, filename)
+    if not os.path.isfile(path):
+        return False
+    registry.clear()
+    scene.clear()
+    FlowSerializer.load_from_file(path, registry, scene)
+    if hasattr(scene, "fit_scene_rect_to_contents"):
+        scene.fit_scene_rect_to_contents()
+    scene.history_changed.emit()
+    return True
 
 
 TEMPLATES = {
@@ -132,28 +162,36 @@ def load_template(name: str, registry, scene) -> bool:
     if not template:
         return False
 
+    flow_file = template.get("file")
+    if flow_file:
+        from core.serializer import FlowSerializer
+        path = flow_file if os.path.isabs(flow_file) else os.path.join(_PKG_DIR, flow_file)
+        if not os.path.isfile(path):
+            return False
+        registry.clear()
+        scene.clear()
+        FlowSerializer.load_from_file(path, registry, scene)
+        scene.history_changed.emit()
+        return True
+
     registry.clear()
     scene.clear()
-    node_map = {}
+    node_obj_map: dict[str, BaseNode] = {}
 
     for node_def in template["nodes"]:
         node = BaseNode(title=node_def["title"])
         node.properties.update(node_def.get("properties", {}))
         node_id = registry.add_node(node)
         node.node_id = node_id
-        node_map[node_def["id"]] = node
+        node_obj_map[node_def["id"]] = node
         scene.addItem(node)
         node.setPos(node_def["x"], node_def["y"])
 
     for edge_def in template["edges"]:
         src_key, dst_key = edge_def[0], edge_def[1]
         branch = edge_def[2] if len(edge_def) > 2 else None
-        src_id = node_map.get(src_key)
-        dst_id = node_map.get(dst_key)
-        if not src_id or not dst_id:
-            continue
-        src_node = registry.get_node(src_id)
-        dst_node = registry.get_node(dst_id)
+        src_node = node_obj_map.get(src_key)
+        dst_node = node_obj_map.get(dst_key)
         if not src_node or not dst_node:
             continue
         if not src_node.output_ports or not dst_node.input_ports:
@@ -165,7 +203,8 @@ def load_template(name: str, registry, scene) -> bool:
         dst_port = dst_node.input_ports[0]
         edge = Edge(src_node, dst_node, source_port=src_port, dest_port=dst_port)
         scene.addItem(edge)
-        registry.add_edge(src_id, dst_id)
+        edge.update_path()
+        registry.add_edge(src_node.node_id, dst_node.node_id)
 
     scene.history_changed.emit()
     return True

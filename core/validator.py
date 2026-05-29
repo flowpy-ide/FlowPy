@@ -50,10 +50,18 @@ class FlowValidator:
                     if hasattr(edge, 'source_node') and edge.source_node is curr:
                         stack.append(edge.dest_node)
 
+        # Yorum / grup düğümleri port taşımaz — ana akışa bağlı olmak zorunda değiller
+        _optional_reach = {"Comment", "Group"}
+
         # Ulaşılmayan düğümleri tespit et
         for node_id, node in nodes.items():
+            if getattr(node, "title", "") in _optional_reach:
+                continue
             if node_id not in reachable:
-                errors.append(ValidationError(f"'{node.title}' düğümüne Start düğümünden ulaşılamıyor. (Bağlantısız)", node))
+                errors.append(ValidationError(
+                    f"'{node.title}' düğümüne Start düğümünden ulaşılamıyor. (Bağlantısız)",
+                    node,
+                ))
 
         # 3. Decision düğümleri için boşta kalan (bağlanmayan) dal kontrolü
         for node in nodes.values():

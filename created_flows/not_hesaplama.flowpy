@@ -1,0 +1,779 @@
+{
+  "nodes": [
+    {
+      "id": "a1000000-0001-4000-8000-000000000001",
+      "title": "Start",
+      "x": 0.0,
+      "y": 0.0,
+      "properties": {
+        "variables": "liste = []\ntoplam = 0\ndeneme = 0\nn = 5\nortalama = 0\nmesaj = 'FlowPy tam demo'\nharf = 'F'\nskor = 0\nrapor = ''"
+      }
+    },
+    {
+      "id": "a1000000-0002-4000-8000-000000000001",
+      "title": "Comment",
+      "x": -520.0,
+      "y": 0.0,
+      "properties": {
+        "text": "FlowPy Tam Demo — tüm düğüm tipleri.\nRun/Step ile çalıştırın."
+      }
+    },
+    {
+      "id": "a1000000-0045-4000-8000-000000000001",
+      "title": "Group",
+      "x": -520.0,
+      "y": 120.0,
+      "properties": {
+        "label": "Döngü & not üretimi"
+      }
+    },
+    {
+      "id": "a1000000-0003-4000-8000-000000000001",
+      "title": "Import",
+      "x": 0.0,
+      "y": 100.0,
+      "properties": {
+        "module": "random",
+        "alias": "",
+        "from_import": ""
+      }
+    },
+    {
+      "id": "a1000000-0004-4000-8000-000000000001",
+      "title": "While",
+      "x": 0.0,
+      "y": 220.0,
+      "properties": {
+        "condition": "deneme < 3",
+        "description": "Geçerli n girilene kadar"
+      }
+    },
+    {
+      "id": "a1000000-0005-4000-8000-000000000001",
+      "title": "Input",
+      "x": -280.0,
+      "y": 220.0,
+      "properties": {
+        "variable": "n",
+        "prompt": "Kaç not? (1-10):",
+        "input_type": "int"
+      }
+    },
+    {
+      "id": "a1000000-0006-4000-8000-000000000001",
+      "title": "Decision",
+      "x": -280.0,
+      "y": 340.0,
+      "properties": {
+        "condition": "n > 0 and n <= 10",
+        "description": "Geçerli aralık"
+      }
+    },
+    {
+      "id": "a1000000-0007-4000-8000-000000000001",
+      "title": "Break",
+      "x": -280.0,
+      "y": 460.0,
+      "properties": {
+        "tag": "geçerli",
+        "description": "While'dan çık (çıkış portu üzerinden)"
+      }
+    },
+    {
+      "id": "a1000000-0008-4000-8000-000000000001",
+      "title": "Process",
+      "x": -280.0,
+      "y": 280.0,
+      "properties": {
+        "code": "deneme += 1",
+        "description": "Hatalı giriş"
+      }
+    },
+    {
+      "id": "a1000000-0009-4000-8000-000000000001",
+      "title": "Continue",
+      "x": -450.0,
+      "y": 310.0,
+      "properties": {
+        "tag": "tekrar",
+        "description": ""
+      }
+    },
+    {
+      "id": "a1000000-0010-4000-8000-000000000001",
+      "title": "Variable",
+      "x": 0.0,
+      "y": 380.0,
+      "properties": {
+        "name": "liste",
+        "value": "[]",
+        "type": "list",
+        "description": "Not listesini sıfırla"
+      }
+    },
+    {
+      "id": "a1000000-0011-4000-8000-000000000001",
+      "title": "For",
+      "x": 0.0,
+      "y": 500.0,
+      "properties": {
+        "variable": "i",
+        "start": "0",
+        "end": "n",
+        "step": "1"
+      }
+    },
+    {
+      "id": "a1000000-0012-4000-8000-000000000001",
+      "title": "Random",
+      "x": -280.0,
+      "y": 500.0,
+      "properties": {
+        "operation": "randint",
+        "args": "40, 100",
+        "result": "skor"
+      }
+    },
+    {
+      "id": "a1000000-0013-4000-8000-000000000001",
+      "title": "Math",
+      "x": -280.0,
+      "y": 620.0,
+      "properties": {
+        "result": "skor",
+        "operand_a": "skor",
+        "operator": "+",
+        "operand_b": "0"
+      }
+    },
+    {
+      "id": "a1000000-0014-4000-8000-000000000001",
+      "title": "List Operation",
+      "x": -280.0,
+      "y": 740.0,
+      "properties": {
+        "list_var": "liste",
+        "operation": "append",
+        "args": "skor",
+        "result": ""
+      }
+    },
+    {
+      "id": "a1000000-0015-4000-8000-000000000001",
+      "title": "Accumulate",
+      "x": -280.0,
+      "y": 860.0,
+      "properties": {
+        "accumulator": "toplam",
+        "operation": "+=",
+        "value": "skor"
+      }
+    },
+    {
+      "id": "a1000000-0016-4000-8000-000000000001",
+      "title": "Decision",
+      "x": -280.0,
+      "y": 980.0,
+      "properties": {
+        "condition": "skor >= 50",
+        "description": "Geçer not"
+      }
+    },
+    {
+      "id": "a1000000-0017-4000-8000-000000000001",
+      "title": "Continue",
+      "x": -450.0,
+      "y": 1010.0,
+      "properties": {
+        "tag": "düşük not",
+        "description": ""
+      }
+    },
+    {
+      "id": "a1000000-0018-4000-8000-000000000001",
+      "title": "Decision",
+      "x": -280.0,
+      "y": 1100.0,
+      "properties": {
+        "condition": "i >= n - 1",
+        "description": "Son tur"
+      }
+    },
+    {
+      "id": "a1000000-0019-4000-8000-000000000001",
+      "title": "Break",
+      "x": -280.0,
+      "y": 1220.0,
+      "properties": {
+        "tag": "for break",
+        "description": ""
+      }
+    },
+    {
+      "id": "a1000000-0020-4000-8000-000000000001",
+      "title": "Sort",
+      "x": 0.0,
+      "y": 640.0,
+      "properties": {
+        "list_var": "liste",
+        "reverse": "False",
+        "key": ""
+      }
+    },
+    {
+      "id": "a1000000-0021-4000-8000-000000000001",
+      "title": "Search",
+      "x": 0.0,
+      "y": 760.0,
+      "properties": {
+        "list_var": "liste",
+        "target": "75",
+        "result": "indeks"
+      }
+    },
+    {
+      "id": "a1000000-0022-4000-8000-000000000001",
+      "title": "Swap",
+      "x": 0.0,
+      "y": 880.0,
+      "properties": {
+        "var_a": "liste[0]",
+        "var_b": "liste[1]",
+        "description": "En az 2 eleman gerekir"
+      }
+    },
+    {
+      "id": "a1000000-0023-4000-8000-000000000001",
+      "title": "Process",
+      "x": 0.0,
+      "y": 1000.0,
+      "properties": {
+        "code": "ortalama = (sum(liste) / len(liste)) if liste else (toplam / n if n else 0)",
+        "description": "Ortalama"
+      }
+    },
+    {
+      "id": "a1000000-0024-4000-8000-000000000001",
+      "title": "If Elif Else",
+      "x": 0.0,
+      "y": 1120.0,
+      "properties": {
+        "condition_if": "ortalama >= 85",
+        "condition_elif": "ortalama >= 60"
+      }
+    },
+    {
+      "id": "a1000000-0025-4000-8000-000000000001",
+      "title": "Process",
+      "x": 280.0,
+      "y": 1080.0,
+      "properties": {
+        "code": "mesaj = 'Mükemmel'; harf = 'A'",
+        "description": "if"
+      }
+    },
+    {
+      "id": "a1000000-0026-4000-8000-000000000001",
+      "title": "Process",
+      "x": 280.0,
+      "y": 1160.0,
+      "properties": {
+        "code": "mesaj = 'İyi'; harf = 'B'",
+        "description": "elif"
+      }
+    },
+    {
+      "id": "a1000000-0027-4000-8000-000000000001",
+      "title": "Process",
+      "x": 280.0,
+      "y": 1240.0,
+      "properties": {
+        "code": "mesaj = 'Geliştirilmeli'; harf = 'C'",
+        "description": "else"
+      }
+    },
+    {
+      "id": "a1000000-0028-4000-8000-000000000001",
+      "title": "Switch Match",
+      "x": 0.0,
+      "y": 1240.0,
+      "properties": {
+        "variable": "harf",
+        "cases": "A,B,C,default"
+      }
+    },
+    {
+      "id": "a1000000-0029-4000-8000-000000000001",
+      "title": "Try Except",
+      "x": 0.0,
+      "y": 1360.0,
+      "properties": {
+        "exception_type": "Exception",
+        "error_var": "e"
+      }
+    },
+    {
+      "id": "a1000000-0030-4000-8000-000000000001",
+      "title": "Process",
+      "x": -280.0,
+      "y": 1360.0,
+      "properties": {
+        "code": "guvenli = toplam / len(liste)",
+        "description": "try"
+      }
+    },
+    {
+      "id": "a1000000-0031-4000-8000-000000000001",
+      "title": "Print",
+      "x": -280.0,
+      "y": 1480.0,
+      "properties": {
+        "expression": "'Hata: ' + str(e)",
+        "end": "\\n"
+      }
+    },
+    {
+      "id": "a1000000-0032-4000-8000-000000000001",
+      "title": "String Operation",
+      "x": 0.0,
+      "y": 1480.0,
+      "properties": {
+        "variable": "mesaj",
+        "operation": "upper",
+        "args": "",
+        "result": "mesaj"
+      }
+    },
+    {
+      "id": "a1000000-0033-4000-8000-000000000001",
+      "title": "Type Cast",
+      "x": 0.0,
+      "y": 1600.0,
+      "properties": {
+        "source": "ortalama",
+        "target": "int",
+        "result": "ort_int"
+      }
+    },
+    {
+      "id": "a1000000-0034-4000-8000-000000000001",
+      "title": "List Comprehension",
+      "x": 0.0,
+      "y": 1720.0,
+      "properties": {
+        "result": "kareler",
+        "expression": "x * x",
+        "variable": "x",
+        "iterable": "liste",
+        "condition": "x > 50"
+      }
+    },
+    {
+      "id": "a1000000-0035-4000-8000-000000000001",
+      "title": "Lambda",
+      "x": 0.0,
+      "y": 1840.0,
+      "properties": {
+        "name": "iki_kat",
+        "params": "x",
+        "body": "x * 2"
+      }
+    },
+    {
+      "id": "a1000000-0036-4000-8000-000000000001",
+      "title": "Function",
+      "x": 280.0,
+      "y": 1720.0,
+      "properties": {
+        "function_name": "puan_artir",
+        "parameters": "x"
+      }
+    },
+    {
+      "id": "a1000000-0037-4000-8000-000000000001",
+      "title": "Return",
+      "x": 280.0,
+      "y": 1840.0,
+      "properties": {
+        "expression": "x + 5"
+      }
+    },
+    {
+      "id": "a1000000-0038-4000-8000-000000000001",
+      "title": "Assert",
+      "x": 0.0,
+      "y": 1960.0,
+      "properties": {
+        "condition": "ortalama >= 0",
+        "message": "Ortalama negatif olamaz"
+      }
+    },
+    {
+      "id": "a1000000-0039-4000-8000-000000000001",
+      "title": "Print",
+      "x": 0.0,
+      "y": 2080.0,
+      "properties": {
+        "expression": "f'Ort={ortalama:.1f} harf={harf} liste={liste} kareler={kareler}'",
+        "end": "\\n"
+      }
+    },
+    {
+      "id": "a1000000-0040-4000-8000-000000000001",
+      "title": "Output",
+      "x": 0.0,
+      "y": 2200.0,
+      "properties": {
+        "expression": "f'indeks={indeks} ort_int={ort_int}'"
+      }
+    },
+    {
+      "id": "a1000000-0041-4000-8000-000000000001",
+      "title": "File Write",
+      "x": 0.0,
+      "y": 2320.0,
+      "properties": {
+        "filepath": "created_flows/demo_rapor.txt",
+        "expression": "f'Rapor: {mesaj} ort={ortalama}'",
+        "mode": "w"
+      }
+    },
+    {
+      "id": "a1000000-0042-4000-8000-000000000001",
+      "title": "File Read",
+      "x": 0.0,
+      "y": 2440.0,
+      "properties": {
+        "filepath": "created_flows/demo_rapor.txt",
+        "variable": "rapor",
+        "mode": "all"
+      }
+    },
+    {
+      "id": "a1000000-0043-4000-8000-000000000001",
+      "title": "Delay",
+      "x": 0.0,
+      "y": 2560.0,
+      "properties": {
+        "seconds": "0.3"
+      }
+    },
+    {
+      "id": "a1000000-0044-4000-8000-000000000001",
+      "title": "Stop",
+      "x": 0.0,
+      "y": 2680.0,
+      "properties": {
+        "message": "Tam demo bitti!"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source_id": "a1000000-0001-4000-8000-000000000001",
+      "dest_id": "a1000000-0003-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0003-4000-8000-000000000001",
+      "dest_id": "a1000000-0004-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0004-4000-8000-000000000001",
+      "dest_id": "a1000000-0005-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0005-4000-8000-000000000001",
+      "dest_id": "a1000000-0006-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0006-4000-8000-000000000001",
+      "dest_id": "a1000000-0007-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0006-4000-8000-000000000001",
+      "dest_id": "a1000000-0008-4000-8000-000000000001",
+      "source_port_index": 1,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0008-4000-8000-000000000001",
+      "dest_id": "a1000000-0009-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0009-4000-8000-000000000001",
+      "dest_id": "a1000000-0004-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0004-4000-8000-000000000001",
+      "dest_id": "a1000000-0010-4000-8000-000000000001",
+      "source_port_index": 1,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0010-4000-8000-000000000001",
+      "dest_id": "a1000000-0011-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0011-4000-8000-000000000001",
+      "dest_id": "a1000000-0012-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0012-4000-8000-000000000001",
+      "dest_id": "a1000000-0013-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0013-4000-8000-000000000001",
+      "dest_id": "a1000000-0014-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0014-4000-8000-000000000001",
+      "dest_id": "a1000000-0015-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0015-4000-8000-000000000001",
+      "dest_id": "a1000000-0016-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0016-4000-8000-000000000001",
+      "dest_id": "a1000000-0018-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0016-4000-8000-000000000001",
+      "dest_id": "a1000000-0017-4000-8000-000000000001",
+      "source_port_index": 1,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0017-4000-8000-000000000001",
+      "dest_id": "a1000000-0011-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0018-4000-8000-000000000001",
+      "dest_id": "a1000000-0019-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0018-4000-8000-000000000001",
+      "dest_id": "a1000000-0011-4000-8000-000000000001",
+      "source_port_index": 1,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0011-4000-8000-000000000001",
+      "dest_id": "a1000000-0020-4000-8000-000000000001",
+      "source_port_index": 1,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0020-4000-8000-000000000001",
+      "dest_id": "a1000000-0021-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0021-4000-8000-000000000001",
+      "dest_id": "a1000000-0022-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0022-4000-8000-000000000001",
+      "dest_id": "a1000000-0023-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0023-4000-8000-000000000001",
+      "dest_id": "a1000000-0024-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0024-4000-8000-000000000001",
+      "dest_id": "a1000000-0025-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0024-4000-8000-000000000001",
+      "dest_id": "a1000000-0026-4000-8000-000000000001",
+      "source_port_index": 1,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0024-4000-8000-000000000001",
+      "dest_id": "a1000000-0027-4000-8000-000000000001",
+      "source_port_index": 2,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0025-4000-8000-000000000001",
+      "dest_id": "a1000000-0028-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0026-4000-8000-000000000001",
+      "dest_id": "a1000000-0028-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0027-4000-8000-000000000001",
+      "dest_id": "a1000000-0028-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0028-4000-8000-000000000001",
+      "dest_id": "a1000000-0029-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0028-4000-8000-000000000001",
+      "dest_id": "a1000000-0029-4000-8000-000000000001",
+      "source_port_index": 1,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0028-4000-8000-000000000001",
+      "dest_id": "a1000000-0029-4000-8000-000000000001",
+      "source_port_index": 2,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0028-4000-8000-000000000001",
+      "dest_id": "a1000000-0029-4000-8000-000000000001",
+      "source_port_index": 3,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0029-4000-8000-000000000001",
+      "dest_id": "a1000000-0030-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0029-4000-8000-000000000001",
+      "dest_id": "a1000000-0031-4000-8000-000000000001",
+      "source_port_index": 1,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0030-4000-8000-000000000001",
+      "dest_id": "a1000000-0032-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0031-4000-8000-000000000001",
+      "dest_id": "a1000000-0032-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0032-4000-8000-000000000001",
+      "dest_id": "a1000000-0033-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0033-4000-8000-000000000001",
+      "dest_id": "a1000000-0034-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0034-4000-8000-000000000001",
+      "dest_id": "a1000000-0035-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0035-4000-8000-000000000001",
+      "dest_id": "a1000000-0036-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0036-4000-8000-000000000001",
+      "dest_id": "a1000000-0037-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0037-4000-8000-000000000001",
+      "dest_id": "a1000000-0038-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0038-4000-8000-000000000001",
+      "dest_id": "a1000000-0039-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0039-4000-8000-000000000001",
+      "dest_id": "a1000000-0040-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0040-4000-8000-000000000001",
+      "dest_id": "a1000000-0041-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0041-4000-8000-000000000001",
+      "dest_id": "a1000000-0042-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0042-4000-8000-000000000001",
+      "dest_id": "a1000000-0043-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    },
+    {
+      "source_id": "a1000000-0043-4000-8000-000000000001",
+      "dest_id": "a1000000-0044-4000-8000-000000000001",
+      "source_port_index": 0,
+      "dest_port_index": 0
+    }
+  ]
+}

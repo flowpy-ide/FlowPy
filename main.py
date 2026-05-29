@@ -15,11 +15,13 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QFileDialog,
                               QDialog, QVBoxLayout, QLineEdit, QPushButton)
 from PyQt6 import uic
 from PyQt6.QtGui import (QAction, QIcon, QPalette, QColor, QPainter, QPixmap, QFont)
-from PyQt6.QtCore import QPointF, Qt, QTimer, QEvent
+from PyQt6.QtCore import QPointF, QRectF, Qt, QTimer, QEvent
 
 from core.registry import NodeRegistry
 from core.settings_manager import SettingsManager
 from core.i18n import t
+from core.i18n_nodes import NODE_CATEGORIES, t_node, t_cat, tn
+from core.i18n_node_docs import get_node_doc
 from core.interpreter import Interpreter
 from core.serializer import FlowSerializer
 from core.undo import UndoManager
@@ -30,51 +32,12 @@ from views.variable_chart import VariableSparklinePanel
 from views.minimap import FlowMinimap
 from views.node_tooltip import NodeDocTooltip
 from models.node import BaseNode
+from core.node_visuals import make_palette_icon
 from core.templates import TEMPLATES, load_template
 
 BASE_DIR = os.path.dirname(__file__)
 APP_ICON_PATH = os.path.join(BASE_DIR, "docs", "icon-svg.svg")
 
-
-# ── Düğüm Kategori Tanımları (isim, renk, ikon şekli) ─────────────────
-NODE_CATEGORIES = {
-    "Basic": [
-        ("Start",    "#22c55e", "rect"),
-        ("Process",  "#3b82f6", "rect"),
-        ("Decision", "#f59e0b", "diamond"),
-    ],
-    "Flow Control": [
-        ("While", "#8b5cf6", "circle"),
-        ("For",   "#8b5cf6", "circle"),
-    ],
-    "I/O": [
-        ("Input",  "#22c55e", "rect"),
-        ("Output", "#22c55e", "rect"),
-    ],
-    "Functions": [
-        ("Function", "#ec4899", "rect"),
-        ("Return",   "#ec4899", "rect"),
-    ],
-}
-
-
-def _make_color_icon(hex_color: str, shape: str = "rect") -> QIcon:
-    """16x16 renkli palet ikonu oluşturur."""
-    pixmap = QPixmap(16, 16)
-    pixmap.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    painter.setBrush(QColor(hex_color))
-    painter.setPen(Qt.PenStyle.NoPen)
-    if shape == "diamond":
-        points = [QPointF(8, 1), QPointF(15, 8), QPointF(8, 15), QPointF(1, 8)]
-        painter.drawPolygon(points)
-    elif shape == "circle":
-        painter.drawEllipse(2, 2, 12, 12)
-    else:
-        painter.drawRoundedRect(2, 2, 12, 12, 3, 3)
-    painter.end()
-    return QIcon(pixmap)
 
 # Renk swatchları için düğüm renk eşlemesi
 SWATCH_COLORS = [
@@ -216,6 +179,10 @@ class FlowPyApp(QMainWindow):
             self.rightPanelDock.setWindowTitle(t("inspector"))
         if hasattr(self, "consoleDock"):
             self.consoleDock.setWindowTitle(t("console_output"))
+        if hasattr(self, "nodeTreeWidget"):
+            self._setup_node_tree()
+        if hasattr(self, "_speed_lbl_widget"):
+            self._speed_lbl_widget.setText(tn("speed_label"))
 
     def _maybe_show_welcome(self):
         """İlk açılışta karşılama ekranını gösterir."""
@@ -235,17 +202,35 @@ class FlowPyApp(QMainWindow):
         QTimer.singleShot(300, self._start_guided_tour)
 
     def _load_example_flow(self):
-        """Örnek akış dosyasını yükler (varsa)."""
-        path = os.path.join(BASE_DIR, "created_flows", "ornek.flowpy")
-        if not os.path.isfile(path):
-            return
-        FlowSerializer.load_from_file(path, self.registry, self.current_scene)
-        self._page_states["page1"] = FlowSerializer.serialize_to_dict(self.registry)
-        self.undo_manager._undo_stack.clear()
-        self.undo_manager._redo_stack.clear()
-        self.undo_manager.save_snapshot()
-        self._update_live_generation()
-        self.statusbar.showMessage(f"✔ Örnek akış yüklendi.", 4000)
+        """Karşılama ekranından örnek akış — önce tam_demo.flowpy."""
+        if os.path.isfile(os.path.join(BASE_DIR, "created_flows", "tam_demo.flowpy")):
+            self._load_created_flow_file("tam_demo.flowpy", confirm=False)
+        else:
+            self._load_created_flow_file("ornek.flowpy", confirm=False)
+
+    def _load_created_flow_file(self, filename: str, confirm: bool = True):
+        """created_flows/ altındaki .flowpy dosyasını yükler."""
+        from core.templates import load_created_flow
+        if confirm and self.registry.get_all_nodes():
+            reply = QMessageBox.question(
+                self, "Akış Yükle",
+                "Mevcut flow silinecek. Devam edilsin mi?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+        if load_created_flow(filename, self.registry, self.current_scene):
+            self._page_states[self._current_page_key] = FlowSerializer.serialize_to_dict(
+                self.registry
+            )
+            self.undo_manager._undo_stack.clear()
+            self.undo_manager._redo_stack.clear()
+            self.undo_manager.save_snapshot()
+            self._update_live_generation()
+            self.statusbar.showMessage(f"✔ Akış yüklendi: {filename}", 3000)
+            self._fit_to_flow()
+        else:
+            self.statusbar.showMessage(f"❌ Akış yüklenemedi: {filename}", 3000)
 
     def _start_guided_tour(self):
         """Eğitim turunu başlatır (ayarlara göre)."""
@@ -360,18 +345,28 @@ class FlowPyApp(QMainWindow):
     def _setup_node_tree(self):
         """Kategorili node ağacını oluşturur."""
         self.nodeTreeWidget.clear()
-        for category, nodes in NODE_CATEGORIES.items():
-            cat_item = QTreeWidgetItem(self.nodeTreeWidget, [category])
+        for cat_key, nodes in NODE_CATEGORIES.items():
+            cat_item = QTreeWidgetItem(self.nodeTreeWidget, [t_cat(cat_key)])
             cat_item.setFlags(cat_item.flags() & ~Qt.ItemFlag.ItemIsDragEnabled)
             font = cat_item.font(0)
             font.setBold(True)
             font.setPointSize(9)
             cat_item.setForeground(0, QColor("#555555"))
             cat_item.setFont(0, font)
-            for name, color, shape in nodes:
-                child = QTreeWidgetItem(cat_item, [f"  {name}"])
+            for name in nodes:
+                theme = BaseNode.NODE_THEME.get(name, BaseNode.DEFAULT_THEME)
+                child = QTreeWidgetItem(cat_item, [f"  {t_node(name)}"])
                 child.setData(0, Qt.ItemDataRole.UserRole, name)
-                child.setIcon(0, _make_color_icon(color, shape))
+                child.setIcon(0, make_palette_icon(theme["glow"], name))
+                doc = get_node_doc(name)
+                if doc:
+                    child.setToolTip(
+                        0,
+                        f"<b>{doc['title']}</b><br>{doc['desc']}<br>"
+                        f"<i>{doc.get('tip', '')}</i>",
+                    )
+                else:
+                    child.setToolTip(0, t_node(name))
                 child.setFlags(child.flags() | Qt.ItemFlag.ItemIsDragEnabled)
             cat_item.setExpanded(True)
 
@@ -683,6 +678,8 @@ class FlowPyApp(QMainWindow):
 
     def _fit_to_flow(self):
         """Tüm akışı görünür alana sığdırır."""
+        if hasattr(self.current_scene, "fit_scene_rect_to_contents"):
+            self.current_scene.fit_scene_rect_to_contents()
         rect = self.current_scene.itemsBoundingRect()
         if rect.isNull() or rect.isEmpty():
             return
@@ -710,8 +707,9 @@ class FlowPyApp(QMainWindow):
         layout.setContentsMargins(8, 0, 8, 0)
         layout.setSpacing(6)
 
-        lbl = QLabel("Hız:")
+        lbl = QLabel(tn("speed_label"))
         lbl.setStyleSheet("color: #666; font-size: 11px;")
+        self._speed_lbl_widget = lbl
 
         self.speedSlider = QSlider(Qt.Orientation.Horizontal)
         self.speedSlider.setRange(0, 10)
@@ -768,6 +766,23 @@ class FlowPyApp(QMainWindow):
                 )
                 examples_menu.addAction(action)
             examples_menu.addSeparator()
+
+        from core.templates import list_created_flow_files, load_created_flow
+        flow_files = list_created_flow_files()
+        if flow_files:
+            hdr = QAction("── Kayıtlı Akışlar (created_flows/) ──", self)
+            hdr.setEnabled(False)
+            examples_menu.addAction(hdr)
+            for fname in flow_files:
+                label = fname.replace(".flowpy", "").replace("_", " ").title()
+                action = QAction(f"  {label}", self)
+                action.setToolTip(fname)
+                action.triggered.connect(
+                    lambda checked=False, f=fname: self._load_created_flow_file(f)
+                )
+                examples_menu.addAction(action)
+            examples_menu.addSeparator()
+
         self.menuFile.addSeparator()
 
         save_action = QAction("💾  Save…", self)
@@ -1100,6 +1115,24 @@ class FlowPyApp(QMainWindow):
 
     # ── Toolbar State ─────────────────────────────────────────────────
 
+    def _flow_items_rect(self) -> QRectF:
+        """Export için sadece akış öğelerinin bounding rect'i.
+
+        Not: Geçici bağlantı çizgisi (QGraphicsPathItem) gibi öğeler
+        itemsBoundingRect'i büyütüp çıktıda flow'u küçücük gösterebiliyor.
+        """
+        from models.node import BaseNode
+        from models.edge import Edge
+
+        rect = QRectF()
+        first = True
+        for item in self.current_scene.items():
+            if isinstance(item, (BaseNode, Edge)):
+                r = item.sceneBoundingRect()
+                rect = r if first else rect.united(r)
+                first = False
+        return rect
+
     def _export_flow_image(self):
         from PyQt6.QtGui import QImage, QPainter
         from PyQt6.QtCore import QRectF
@@ -1107,11 +1140,11 @@ class FlowPyApp(QMainWindow):
         filepath, _ = QFileDialog.getSaveFileName(
             self, "Flow'u Dışa Aktar",
             "flow_diagram.png",
-            "PNG Görüntü (*.png);;SVG Vektör (*.svg)",
+            "PNG Görüntü (*.png);;JPG Görüntü (*.jpg *.jpeg);;SVG Vektör (*.svg)",
         )
         if not filepath:
             return
-        rect = self.current_scene.itemsBoundingRect()
+        rect = self._flow_items_rect()
         if rect.isNull():
             self.statusbar.showMessage("⚠ Dışa aktarılacak içerik yok.", 3000)
             return
@@ -1124,19 +1157,25 @@ class FlowPyApp(QMainWindow):
             generator.setSize(rect.size().toSize())
             generator.setViewBox(rect)
             painter = QPainter(generator)
-            self.current_scene.render(painter, QRectF(), rect)
+            # SVG için hedef rect'i açık ver (bazı sürücülerde boş QRectF kırpabiliyor)
+            self.current_scene.render(painter, QRectF(0, 0, rect.width(), rect.height()), rect)
             painter.end()
         else:
-            scale = 2
-            image = QImage(
-                int(rect.width() * scale), int(rect.height() * scale),
-                QImage.Format.Format_ARGB32,
-            )
-            image.fill(Qt.GlobalColor.transparent)
+            scale = 3
+            img_w = max(1, int(rect.width() * scale))
+            img_h = max(1, int(rect.height() * scale))
+            image = QImage(img_w, img_h, QImage.Format.Format_ARGB32)
+            # JPG transparan desteklemez; PNG'de de daha okunur olsun diye koyu zemin basıyoruz
+            lower = filepath.lower()
+            if lower.endswith(".jpg") or lower.endswith(".jpeg"):
+                image.fill(QColor("#ffffff"))
+            else:
+                image.fill(QColor("#1e1e1e"))
             painter = QPainter(image)
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            painter.scale(scale, scale)
-            self.current_scene.render(painter, QRectF(), rect)
+            # Ölçekli painter + boş target QRectF bazı durumlarda sadece sol-üstü çiziyor (kırpma).
+            # Hedefi cihaz pikseli olarak açık vererek tüm flow'u render et.
+            self.current_scene.render(painter, QRectF(0, 0, img_w, img_h), rect)
             painter.end()
             image.save(filepath)
         self.statusbar.showMessage(f"✔ Dışa aktarıldı: {filepath}", 4000)
@@ -1144,9 +1183,9 @@ class FlowPyApp(QMainWindow):
     def _export_pdf_report(self):
         import datetime
         import re
-        from PyQt6.QtGui import QPainter, QPageSize, QFont, QColor
+        from PyQt6.QtGui import QPainter, QFont, QColor, QImage, QPageSize, QPageLayout, QPen
         from PyQt6.QtPrintSupport import QPrinter
-        from PyQt6.QtCore import QRectF, QMarginsF
+        from PyQt6.QtCore import QRectF, Qt, QMarginsF
 
         filepath, _ = QFileDialog.getSaveFileName(
             self, "PDF Rapor Dışa Aktar", "flowpy_report.pdf", "PDF (*.pdf)"
@@ -1158,80 +1197,281 @@ class FlowPyApp(QMainWindow):
         printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
         printer.setOutputFileName(filepath)
         printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
-        printer.setPageMargins(QMarginsF(20, 20, 20, 20), QPrinter.Unit.Millimeter)
-
-        painter = QPainter(printer)
-        page_rect = QRectF(printer.pageRect(QPrinter.Unit.DevicePixel))
-        y = 0
-        line_h = 14
-
-        painter.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
-        painter.setPen(QColor("#1e3a6e"))
-        painter.drawText(QRectF(0, y, page_rect.width(), 50), Qt.AlignmentFlag.AlignLeft, "FlowPy")
-        y += 55
-
-        painter.setFont(QFont("Segoe UI", 11))
-        painter.setPen(QColor("#666"))
-        now = datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
-        node_count = len(self.registry.get_all_nodes())
-        edge_count = len(self.registry.edges)
-        painter.drawText(
-            QRectF(0, y, page_rect.width(), 20), Qt.AlignmentFlag.AlignLeft,
-            f"Oluşturulma: {now}  ·  {node_count} düğüm  ·  {edge_count} bağlantı",
+        printer.setPageOrientation(QPageLayout.Orientation.Portrait)
+        printer.setPageMargins(
+            QMarginsF(15, 15, 15, 15),
+            QPageLayout.Unit.Millimeter,
         )
-        y += 30
-        painter.setPen(QColor("#ddd"))
-        painter.drawLine(0, int(y), int(page_rect.width()), int(y))
-        y += 20
 
-        items_rect = self.current_scene.itemsBoundingRect()
-        if not items_rect.isNull():
-            avail_h = page_rect.height() * 0.45
-            avail_w = page_rect.width()
-            self.current_scene.render(painter, QRectF(0, y, avail_w, avail_h), items_rect)
-            y += avail_h + 20
+        painter = QPainter()
+        if not painter.begin(printer):
+            self.statusbar.showMessage("❌ PDF başlatılamadı.", 4000)
+            return
 
-        printer.newPage()
-        y = 0
-        painter.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-        painter.setPen(QColor("#1e3a6e"))
-        painter.drawText(
-            QRectF(0, y, page_rect.width(), 30), Qt.AlignmentFlag.AlignLeft, "Üretilen Python Kodu"
-        )
-        y += 40
-        code = self.codeGenOutput.toPlainText()
-        painter.setFont(QFont("Consolas", 9))
-        painter.setPen(QColor("#1a1a1a"))
-        painter.fillRect(QRectF(0, y, page_rect.width(), page_rect.height() - y - 20), QColor("#f8f8f8"))
-        for line in code.split("\n"):
-            if y + line_h > page_rect.height() - 20:
-                printer.newPage()
-                y = 20
-            painter.drawText(QRectF(8, y, page_rect.width() - 16, line_h), Qt.AlignmentFlag.AlignLeft, line)
-            y += line_h
+        dpi = printer.resolution()
+        page_r = printer.pageRect(QPrinter.Unit.DevicePixel)
+        PW = page_r.width()
+        PH = page_r.height()
 
-        console_text = self.consoleOutput.toPlainText()
-        if console_text.strip():
+        def px(mm):
+            return mm * dpi / 25.4
+
+        MARGIN = px(15)
+        CONTENT_W = PW - 2 * MARGIN
+        y = MARGIN
+
+        def draw_text(text, font_size, bold=False, color=QColor("#111111"),
+                      align=Qt.AlignmentFlag.AlignLeft, rect_override=None):
+            nonlocal y
+            f = QFont("Segoe UI", font_size)
+            f.setBold(bold)
+            painter.setFont(f)
+            painter.setPen(color)
+            r = rect_override or QRectF(MARGIN, y, CONTENT_W, px(font_size * 1.8))
+            painter.drawText(r, align | Qt.TextFlag.TextWordWrap, text)
+            if rect_override is None:
+                y += r.height()
+
+        def draw_hline(color=QColor("#dddddd"), thickness=1):
+            nonlocal y
+            painter.setPen(QPen(color, thickness))
+            painter.drawLine(int(MARGIN), int(y), int(MARGIN + CONTENT_W), int(y))
+            y += px(4)
+
+        def new_page():
+            nonlocal y
             printer.newPage()
-            y = 0
-            painter.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-            painter.setPen(QColor("#1e3a6e"))
-            painter.drawText(
-                QRectF(0, y, page_rect.width(), 30), Qt.AlignmentFlag.AlignLeft, "Çalıştırma Logu"
+            y = MARGIN
+
+        def ensure_space(needed_px):
+            nonlocal y
+            if y + needed_px > PH - MARGIN:
+                new_page()
+
+        # SAYFA 1 — Başlık + Flow Diyagramı
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor("#1a3a6e"))
+        painter.drawRect(QRectF(0, 0, PW, px(8)))
+        y = px(12)
+
+        draw_text("FlowPy", int(px(7) / dpi * 72), bold=True, color=QColor("#1a3a6e"))
+        draw_text(
+            "Modern Algorithm IDE — Akış Raporu",
+            int(px(3.5) / dpi * 72),
+            color=QColor("#666666"),
+        )
+        y += px(4)
+        draw_hline(QColor("#cccccc"), 1)
+        y += px(4)
+
+        now = datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
+        nc = len(self.registry.get_all_nodes())
+        ec = len(self.registry.edges)
+        lang = (
+            self.codeGenLangCombo.currentText()
+            if hasattr(self, "codeGenLangCombo")
+            else "Python"
+        )
+        meta = f"Tarih: {now}   |   Düğüm: {nc}   |   Bağlantı: {ec}   |   Dil: {lang}"
+        draw_text(meta, int(px(3) / dpi * 72), color=QColor("#888888"))
+        y += px(8)
+
+        items_rect = self._flow_items_rect()
+        if not items_rect.isNull() and not items_rect.isEmpty():
+            MARGIN_SCENE = 30
+            items_rect = items_rect.adjusted(
+                -MARGIN_SCENE, -MARGIN_SCENE, MARGIN_SCENE, MARGIN_SCENE
             )
-            y += 40
-            painter.setFont(QFont("Consolas", 9))
-            painter.setPen(QColor("#333"))
-            for line in console_text.split("\n"):
-                if y + line_h > page_rect.height() - 20:
-                    printer.newPage()
-                    y = 20
-                clean = re.sub(r"<[^>]+>", "", line)
-                painter.drawText(QRectF(0, y, page_rect.width(), line_h), Qt.AlignmentFlag.AlignLeft, clean)
-                y += line_h
+
+            avail_h = PH * 0.48
+            avail_w = CONTENT_W
+
+            scale_x = avail_w / items_rect.width()
+            scale_y = avail_h / items_rect.height()
+            scale = min(scale_x, scale_y)
+
+            img_w = int(items_rect.width() * scale)
+            img_h = int(items_rect.height() * scale)
+
+            SS = 2
+            image = QImage(img_w * SS, img_h * SS, QImage.Format.Format_ARGB32)
+            image.fill(QColor("#1e1e1e"))
+
+            img_painter = QPainter(image)
+            img_painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            img_painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            self.current_scene.render(
+                img_painter,
+                QRectF(0, 0, img_w * SS, img_h * SS),
+                items_rect,
+            )
+            img_painter.end()
+
+            x_offset = MARGIN + (CONTENT_W - img_w) / 2
+            ensure_space(img_h + px(4))
+
+            painter.setPen(QPen(QColor("#cccccc"), 1))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(QRectF(x_offset - 2, y - 2, img_w + 4, img_h + 4))
+
+            painter.drawImage(
+                QRectF(x_offset, y, img_w, img_h),
+                image,
+                QRectF(0, 0, img_w * SS, img_h * SS),
+            )
+            y += img_h + px(6)
+
+            draw_text(
+                "Şekil 1 — Algoritma Akış Diyagramı",
+                int(px(2.8) / dpi * 72),
+                color=QColor("#999999"),
+                align=Qt.AlignmentFlag.AlignHCenter,
+            )
+        else:
+            draw_text(
+                "(Canvas boş — diyagram yok)",
+                int(px(3) / dpi * 72),
+                color=QColor("#aaaaaa"),
+            )
+
+        # SAYFA 2 — Üretilen Kod
+        new_page()
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor("#1a3a6e"))
+        painter.drawRect(QRectF(0, 0, PW, px(8)))
+        y = px(12)
+
+        draw_text(
+            f"Üretilen Kod — {lang}",
+            int(px(5.5) / dpi * 72),
+            bold=True,
+            color=QColor("#1a3a6e"),
+        )
+        y += px(4)
+        draw_hline(QColor("#cccccc"), 1)
+        y += px(6)
+
+        code_text = self.codeGenOutput.toPlainText().strip()
+
+        if code_text:
+            CODE_FONT_PT = int(px(2.8) / dpi * 72)
+            code_font = QFont("Consolas", CODE_FONT_PT)
+            painter.setFont(code_font)
+            fm = painter.fontMetrics()
+            lh = fm.height() + 2
+            pad = px(6)
+
+            lines = code_text.split("\n")
+
+            for i, line in enumerate(lines):
+                ensure_space(lh + pad)
+
+                if i == 0 or y == MARGIN:
+                    bg_rect = QRectF(
+                        MARGIN, y - pad / 2,
+                        CONTENT_W, PH - y - MARGIN + pad / 2,
+                    )
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setBrush(QColor("#f8f8f8"))
+                    painter.drawRoundedRect(bg_rect, px(2), px(2))
+
+                painter.setFont(QFont("Consolas", CODE_FONT_PT))
+                painter.setPen(QColor("#bbbbbb"))
+                num_r = QRectF(MARGIN + px(1), y, px(8), lh)
+                painter.drawText(num_r, Qt.AlignmentFlag.AlignRight, str(i + 1))
+
+                stripped = line.rstrip()
+                if stripped.strip().startswith(("#", "//", "/*")):
+                    painter.setPen(QColor("#6a9955"))
+                elif any(
+                    kw in stripped
+                    for kw in [
+                        "def ", "class ", "import ", "return", "if ", "else", "elif",
+                        "for ", "while ", "int ", "void ", "public ", "static ",
+                    ]
+                ):
+                    painter.setPen(QColor("#569cd6"))
+                else:
+                    painter.setPen(QColor("#333333"))
+
+                code_r = QRectF(MARGIN + px(10), y, CONTENT_W - px(10), lh)
+                painter.drawText(
+                    code_r,
+                    Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextSingleLine,
+                    stripped,
+                )
+                y += lh
+        else:
+            draw_text(
+                "(Kod bulunamadı — önce bir flow çizin)",
+                int(px(3) / dpi * 72),
+                color=QColor("#aaaaaa"),
+            )
+
+        raw_console = self.consoleOutput.toPlainText().strip()
+        clean_console = re.sub(r"<[^>]+>", "", raw_console).strip()
+
+        if clean_console:
+            new_page()
+
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor("#1a3a6e"))
+            painter.drawRect(QRectF(0, 0, PW, px(8)))
+            y = px(12)
+
+            draw_text(
+                "Çalıştırma Logu",
+                int(px(5.5) / dpi * 72),
+                bold=True,
+                color=QColor("#1a3a6e"),
+            )
+            y += px(4)
+            draw_hline(QColor("#cccccc"), 1)
+            y += px(6)
+
+            LOG_FONT_PT = int(px(2.8) / dpi * 72)
+            log_font = QFont("Consolas", LOG_FONT_PT)
+            painter.setFont(log_font)
+            fm = painter.fontMetrics()
+            lh = fm.height() + 2
+
+            for line in clean_console.split("\n"):
+                ensure_space(lh)
+                stripped = line.strip()
+                if not stripped:
+                    y += lh * 0.4
+                    continue
+                if "✔" in stripped or "tamamlandı" in stripped.lower():
+                    painter.setPen(QColor("#1a6b38"))
+                elif "✗" in stripped or "Hata" in stripped:
+                    painter.setPen(QColor("#8b1a1a"))
+                elif "⚠" in stripped:
+                    painter.setPen(QColor("#7a5a00"))
+                elif stripped.startswith("["):
+                    painter.setPen(QColor("#1a3a6e"))
+                else:
+                    painter.setPen(QColor("#444444"))
+
+                r = QRectF(MARGIN, y, CONTENT_W, lh)
+                painter.drawText(
+                    r,
+                    Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextSingleLine,
+                    stripped,
+                )
+                y += lh
+
+        y = PH - MARGIN - px(5)
+        draw_hline(QColor("#eeeeee"), 1)
+        draw_text(
+            f"FlowPy — {now}  ·  flowpy_report.pdf",
+            int(px(2.5) / dpi * 72),
+            color=QColor("#bbbbbb"),
+            align=Qt.AlignmentFlag.AlignHCenter,
+        )
 
         painter.end()
-        self.statusbar.showMessage(f"✔ PDF raporu oluşturuldu: {filepath}", 4000)
+        self.statusbar.showMessage(f"✔ PDF oluşturuldu: {filepath}", 4000)
 
     def _share_flow_link(self):
         import json

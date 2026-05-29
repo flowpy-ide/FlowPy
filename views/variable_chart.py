@@ -3,6 +3,8 @@
 # VariableSparklinePanel : Sayısal değişkenler için miniature trend grafikleri.
 # ──────────────────────────────────────────────────────────────────────
 
+import math
+
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PyQt6.QtCore import Qt, QRectF, QPointF
 from PyQt6.QtGui import QPainter, QPen, QColor, QPainterPath, QFont, QBrush
@@ -92,6 +94,24 @@ class SparklineWidget(QWidget):
         painter.end()
 
 
+def _coerce_chart_value(value) -> float | None:
+    """int/float → grafik değeri; çok büyük int'lerde taşmayı önler."""
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, int):
+        try:
+            f = float(value)
+            return f if math.isfinite(f) else None
+        except OverflowError:
+            if value == 0:
+                return 0.0
+            # Faktöriyel vb. — log ölçeğiyle trend göster, çökme yok
+            return math.copysign(math.log10(abs(value)), value)
+    return None
+
+
 class VariableSparklinePanel(QWidget):
     """Tüm sayısal değişkenlerin sparkline'larını gösteren panel."""
 
@@ -136,7 +156,10 @@ class VariableSparklinePanel(QWidget):
                 spark = SparklineWidget(name, color, self)
                 self._sparklines[name] = spark
                 self._layout.addWidget(spark)
-            self._sparklines[name].add_value(float(value))
+            chart_val = _coerce_chart_value(value)
+            if chart_val is None:
+                continue
+            self._sparklines[name].add_value(chart_val)
 
     def reset(self):
         for spark in self._sparklines.values():

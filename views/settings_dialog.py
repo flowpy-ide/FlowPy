@@ -14,6 +14,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 
 from core.settings_manager import SettingsManager
+from core.i18n import t
 
 ACCENT = "#4078c8"
 BG = "#1e1e1e"
@@ -32,7 +33,7 @@ class SettingsDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Ayarlar")
+        self.setWindowTitle(t("settings_title"))
         self.setMinimumSize(520, 380)
         self._sm = SettingsManager.instance()
         self._pending_lang = self._sm.get("language", "tr")
@@ -46,8 +47,9 @@ class SettingsDialog(QDialog):
 
         self._categories = QListWidget()
         self._categories.setFixedWidth(140)
-        for name in ("Dil", "Tema", "Genel"):
-            self._categories.addItem(QListWidgetItem(name))
+        self._cat_keys = ("settings_cat_language", "settings_cat_theme", "settings_cat_general")
+        for key in self._cat_keys:
+            self._categories.addItem(QListWidgetItem(t(key)))
         self._categories.currentRowChanged.connect(self._on_category_changed)
         layout.addWidget(self._categories)
 
@@ -60,9 +62,9 @@ class SettingsDialog(QDialog):
         bottom = QVBoxLayout()
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        close_btn = QPushButton("Kapat")
-        close_btn.clicked.connect(self.accept)
-        btn_row.addWidget(close_btn)
+        self._close_btn = QPushButton(t("settings_close"))
+        self._close_btn.clicked.connect(self.accept)
+        btn_row.addWidget(self._close_btn)
         bottom.addLayout(btn_row)
 
         outer = QVBoxLayout()
@@ -73,38 +75,37 @@ class SettingsDialog(QDialog):
     def _page_language(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.addWidget(QLabel("Uygulama Dili"))
+        self._lang_title = QLabel(t("settings_app_language"))
+        layout.addWidget(self._lang_title)
         self._lang_combo = QComboBox()
-        self._lang_combo.addItems(["🇹🇷 Türkçe", "🇬🇧 English"])
+        self._lang_combo.addItems([t("lang_combo_tr"), t("lang_combo_en")])
         layout.addWidget(self._lang_combo)
-        layout.addWidget(QLabel(
-            "⚠ Dil değişikliği uygulamayı yeniden başlatmayı gerektirir."
-        ))
-        apply_lang = QPushButton("Uygula")
-        apply_lang.clicked.connect(self._apply_language)
-        layout.addWidget(apply_lang)
-        restart_btn = QPushButton("Şimdi Yeniden Başlat")
-        restart_btn.clicked.connect(self._restart_app)
-        layout.addWidget(restart_btn)
+        self._lang_hint = QLabel(t("settings_lang_restart_hint"))
+        layout.addWidget(self._lang_hint)
+        self._apply_lang_btn = QPushButton(t("settings_apply"))
+        self._apply_lang_btn.clicked.connect(self._apply_language)
+        layout.addWidget(self._apply_lang_btn)
+        self._restart_btn = QPushButton(t("settings_restart_now"))
+        self._restart_btn.clicked.connect(self._restart_app)
+        layout.addWidget(self._restart_btn)
         layout.addStretch()
         return page
 
     def _page_theme(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
-        layout.addWidget(QLabel("Renk Teması"))
+        self._theme_title = QLabel(t("settings_color_theme"))
+        layout.addWidget(self._theme_title)
         self._theme_group = QButtonGroup(self)
         theme_box = QGroupBox()
         theme_layout = QVBoxLayout(theme_box)
-        themes = [
-            ("dark", "🌑 Dark (varsayılan)"),
-            ("light", "☀️ Light"),
-            ("ocean", "🌊 Ocean"),
-        ]
+        self._theme_radios: list[tuple[str, QRadioButton]] = []
+        theme_keys = ("dark", "light", "ocean")
+        theme_label_keys = ("theme_dark", "theme_light", "theme_ocean")
         current = self._sm.get("theme", "dark")
-        for key, label in themes:
+        for key, label_key in zip(theme_keys, theme_label_keys):
             row = QHBoxLayout()
-            radio = QRadioButton(label)
+            radio = QRadioButton(t(label_key))
             radio.setProperty("theme_key", key)
             swatch = QLabel("   ")
             swatch.setFixedSize(28, 18)
@@ -117,6 +118,7 @@ class SettingsDialog(QDialog):
             row.addStretch()
             theme_layout.addLayout(row)
             self._theme_group.addButton(radio)
+            self._theme_radios.append((label_key, radio))
             if key == current:
                 radio.setChecked(True)
             radio.toggled.connect(
@@ -129,16 +131,16 @@ class SettingsDialog(QDialog):
     def _page_general(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
-        self._welcome_cb = QCheckBox("Başlangıçta karşılama ekranını göster")
-        self._tour_cb = QCheckBox("Başlangıçta eğitim turunu göster")
-        self._autosave_cb = QCheckBox("Otomatik kayıt (yakında)")
+        self._welcome_cb = QCheckBox(t("settings_welcome_startup"))
+        self._tour_cb = QCheckBox(t("settings_tour_startup"))
+        self._autosave_cb = QCheckBox(t("settings_autosave"))
         self._autosave_cb.setEnabled(False)
         layout.addWidget(self._welcome_cb)
         layout.addWidget(self._tour_cb)
         layout.addWidget(self._autosave_cb)
-        reset_btn = QPushButton("Varsayılanlara Sıfırla")
-        reset_btn.clicked.connect(self._reset_defaults)
-        layout.addWidget(reset_btn)
+        self._reset_btn = QPushButton(t("settings_reset_defaults"))
+        self._reset_btn.clicked.connect(self._reset_defaults)
+        layout.addWidget(self._reset_btn)
         layout.addStretch()
         return page
 
@@ -182,6 +184,34 @@ class SettingsDialog(QDialog):
         lang = "tr" if idx == 0 else "en"
         self._sm.set("language", lang)
         self._pending_lang = lang
+        self._retranslate_ui()
+        parent = self.parent()
+        if parent and hasattr(parent, "_apply_ui_strings"):
+            parent._apply_ui_strings()
+            parent.statusbar.showMessage(t("lang_applied"), 3000)
+
+    def _retranslate_ui(self):
+        self.setWindowTitle(t("settings_title"))
+        for i, key in enumerate(self._cat_keys):
+            self._categories.item(i).setText(t(key))
+        self._lang_title.setText(t("settings_app_language"))
+        self._lang_hint.setText(t("settings_lang_restart_hint"))
+        self._theme_title.setText(t("settings_color_theme"))
+        self._welcome_cb.setText(t("settings_welcome_startup"))
+        self._tour_cb.setText(t("settings_tour_startup"))
+        self._autosave_cb.setText(t("settings_autosave"))
+        self._apply_lang_btn.setText(t("settings_apply"))
+        self._restart_btn.setText(t("settings_restart_now"))
+        self._close_btn.setText(t("settings_close"))
+        self._reset_btn.setText(t("settings_reset_defaults"))
+        idx = self._lang_combo.currentIndex()
+        self._lang_combo.blockSignals(True)
+        self._lang_combo.clear()
+        self._lang_combo.addItems([t("lang_combo_tr"), t("lang_combo_en")])
+        self._lang_combo.setCurrentIndex(idx)
+        self._lang_combo.blockSignals(False)
+        for label_key, radio in self._theme_radios:
+            radio.setText(t(label_key))
 
     def _apply_theme(self, theme_name: str):
         self._sm.set("theme", theme_name)
