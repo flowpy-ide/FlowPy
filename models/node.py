@@ -133,6 +133,9 @@ class BaseNode(QGraphicsItem):
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges)
+        self.setAcceptHoverEvents(True)
+        self._hover = False
+        self._has_breakpoint = False
 
         self.input_ports: list[Port] = []
         self.output_ports: list[Port] = []
@@ -175,6 +178,35 @@ class BaseNode(QGraphicsItem):
             self._color_glow = QColor(theme["glow"])
         self._color_text_dim = QColor(self._color_text)
         self._color_text_dim.setAlpha(int(255 * 0.6))
+
+    def toggle_breakpoint(self):
+        self._has_breakpoint = not self._has_breakpoint
+        self.update()
+
+    def hoverEnterEvent(self, event):
+        super().hoverEnterEvent(event)
+        self._hover = True
+        self.update()
+        scene = self.scene()
+        if scene and scene.views():
+            view = scene.views()[0]
+            main = view.window()
+            if hasattr(main, "_node_tooltip"):
+                local_pt = view.mapFromScene(
+                    self.scenePos() + QPointF(self.WIDTH / 2, 0)
+                )
+                gp = view.mapToGlobal(local_pt)
+                main._node_tooltip.show_for_node(self.title, gp)
+
+    def hoverLeaveEvent(self, event):
+        super().hoverLeaveEvent(event)
+        self._hover = False
+        self.update()
+        scene = self.scene()
+        if scene and scene.views():
+            main = scene.views()[0].window()
+            if hasattr(main, "_node_tooltip"):
+                main._node_tooltip.schedule_hide(500)
 
     def set_highlight(self, active: bool):
         self._highlight_active = active
@@ -276,6 +308,11 @@ class BaseNode(QGraphicsItem):
                 painter.setPen(QPen(self._color_border, 1.5, border_style))
 
         painter.drawRoundedRect(rect, self.CORNER_RADIUS, self.CORNER_RADIUS)
+
+        if self._has_breakpoint:
+            painter.setBrush(QBrush(QColor("#ef4444")))
+            painter.setPen(QPen(QColor("#7f1d1d"), 1))
+            painter.drawEllipse(QRectF(4, 4, 10, 10))
 
         title_rect = QRectF(0, 4, self.WIDTH, self.HEIGHT / 2)
         font = QFont("Segoe UI", 10, QFont.Weight.Bold)

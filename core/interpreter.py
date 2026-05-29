@@ -48,6 +48,13 @@ class Interpreter(QObject):
         self._is_paused = False
         self.MAX_STEPS = 500
 
+        self._execution_delay_ms: int = 0
+        self._step_timer = QTimer()
+        self._step_timer.setSingleShot(True)
+        self._step_timer.timeout.connect(self._do_next_step)
+        self._pending_run = False
+        self._breakpoints: set = set()
+
     def _log(self, msg: str, level: str = "info"):
         color, icon = self._LOG_COLORS.get(level, ("#888888", "·"))
         self.log_message.emit(
@@ -75,6 +82,19 @@ class Interpreter(QObject):
             level = "output"
         self._log(msg.strip(), level)
 
+    def set_execution_speed(self, delay_ms: int):
+        """0–2000 ms arası gecikme. 0 = tam hız."""
+        self._execution_delay_ms = max(0, min(2000, delay_ms))
+
+    def toggle_breakpoint(self, node_id: str):
+        if node_id in self._breakpoints:
+            self._breakpoints.discard(node_id)
+        else:
+            self._breakpoints.add(node_id)
+
+    def has_breakpoint(self, node_id: str) -> bool:
+        return node_id in self._breakpoints
+
     def run_flow(self):
         if not self._is_active:
             if not self._init_flow():
@@ -82,9 +102,25 @@ class Interpreter(QObject):
         self._is_paused = False
         self.flow_state_changed.emit(True, False)
         self._log("Akış yürütülüyor…", "start")
-        while self._current_node and not self._is_paused:
-            self._process_current_node()
-            QCoreApplication.processEvents()
+
+        if self._execution_delay_ms > 0:
+            self._pending_run = True
+            self._schedule_next_step()
+        else:
+            while self._current_node and not self._is_paused:
+                self._process_current_node()
+                QCoreApplication.processEvents()
+
+    def _schedule_next_step(self):
+        if self._current_node and self._pending_run and not self._is_paused:
+            self._step_timer.start(self._execution_delay_ms)
+
+    def _do_next_step(self):
+        if not self._current_node or not self._pending_run:
+            return
+        self._process_current_node()
+        if self._current_node and self._pending_run and not self._is_paused:
+            self._schedule_next_step()
 
     def step_flow(self):
         if not self._is_active:
@@ -97,6 +133,8 @@ class Interpreter(QObject):
     def stop_flow(self):
         if not self._is_active:
             return
+        self._pending_run = False
+        self._step_timer.stop()
         self._is_active = False
         self._is_paused = False
         self._current_node = None
@@ -172,6 +210,14 @@ class Interpreter(QObject):
         title = getattr(node, "title", "?")
         node_id = getattr(node, "node_id", "?")
         short_id = node_id[:8] if len(node_id) >= 8 else node_id
+
+        if node_id in self._breakpoints and self._current_step > 1:
+            self._is_paused = True
+            self._pending_run = False
+            self.flow_state_changed.emit(True, True)
+            self._log(f"Breakpoint: {title} durdu.", "warning")
+            self.highlight_node.emit(node)
+            return
 
         self.highlight_node.emit(node)
         next_node = None

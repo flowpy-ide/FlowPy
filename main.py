@@ -10,7 +10,9 @@ import ctypes
 
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QFileDialog,
                               QTreeWidgetItem, QTableWidgetItem, QHeaderView,
-                              QButtonGroup, QToolButton)
+                              QButtonGroup, QToolButton, QSlider, QLabel,
+                              QWidget, QHBoxLayout, QMessageBox, QInputDialog,
+                              QDialog, QVBoxLayout, QLineEdit, QPushButton)
 from PyQt6 import uic
 from PyQt6.QtGui import (QAction, QIcon, QPalette, QColor, QPainter, QPixmap, QFont)
 from PyQt6.QtCore import QPointF, Qt, QTimer, QEvent
@@ -24,7 +26,11 @@ from core.undo import UndoManager
 from core.generator import CodeGenerator
 from core.syntax_highlighter import CodeHighlighter
 from views.canvas import FlowScene, ZoomPanFilter, HorizontalRuler, VerticalRuler
+from views.variable_chart import VariableSparklinePanel
+from views.minimap import FlowMinimap
+from views.node_tooltip import NodeDocTooltip
 from models.node import BaseNode
+from core.templates import TEMPLATES, load_template
 
 BASE_DIR = os.path.dirname(__file__)
 APP_ICON_PATH = os.path.join(BASE_DIR, "docs", "icon-svg.svg")
@@ -121,6 +127,7 @@ class FlowPyApp(QMainWindow):
         self._setup_inspector_badge()
         self._setup_console_output()
         self._setup_toolbar_button_styles()
+        self._setup_speed_control()
 
         # ── 6. Sinyal / Slot bağlantıları ────────────────────────────
         self.interpreter.log_message.connect(self.consoleOutput.append)
@@ -145,6 +152,11 @@ class FlowPyApp(QMainWindow):
             0, QHeaderView.ResizeMode.Stretch)
         self.variableTable.horizontalHeader().setSectionResizeMode(
             1, QHeaderView.ResizeMode.Stretch)
+        self.sparkline_panel = VariableSparklinePanel()
+        if hasattr(self, "variablesTabLayout"):
+            self.variablesTabLayout.addWidget(self.sparkline_panel)
+        self.interpreter.scope_changed.connect(self.sparkline_panel.update_scope)
+        self._was_flow_active = False
         self._update_toolbar_state(is_active=False, is_paused=False)
 
         # ── 7.5 Code Generator ────────────────────────────────────────
@@ -183,6 +195,12 @@ class FlowPyApp(QMainWindow):
 
         self._guided_tour = None
         SettingsManager.instance().ensure_defaults()
+        self._node_tooltip = NodeDocTooltip(self)
+        self._minimap = FlowMinimap(self.graphicsView, self.current_scene, self.graphicsView)
+        self._position_minimap()
+        self._minimap.show()
+        self._minimap.raise_()
+
         self._apply_ui_strings()
         self._maybe_show_welcome()
 
@@ -287,6 +305,8 @@ class FlowPyApp(QMainWindow):
         self.graphicsView.setScene(self.current_scene)
         self.undo_manager.scene = self.current_scene
         self._connect_scene_signals(self.current_scene)
+        if hasattr(self, "_minimap"):
+            self._minimap.scene = self.current_scene
 
         self._update_properties_panel()
         self._update_style_panel()
@@ -672,7 +692,84 @@ class FlowPyApp(QMainWindow):
 
     # ── Dosya Menüsü ─────────────────────────────────────────────────
 
+    def _position_minimap(self):
+        if hasattr(self, "_minimap"):
+            self._minimap.move(
+                self.graphicsView.width() - FlowMinimap.WIDTH - 10,
+                self.graphicsView.height() - FlowMinimap.HEIGHT - 10,
+            )
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._position_minimap()
+
+    def _setup_speed_control(self):
+        """Toolbar'a execution speed slider ekler."""
+        speed_widget = QWidget()
+        layout = QHBoxLayout(speed_widget)
+        layout.setContentsMargins(8, 0, 8, 0)
+        layout.setSpacing(6)
+
+        lbl = QLabel("Hız:")
+        lbl.setStyleSheet("color: #666; font-size: 11px;")
+
+        self.speedSlider = QSlider(Qt.Orientation.Horizontal)
+        self.speedSlider.setRange(0, 10)
+        self.speedSlider.setValue(0)
+        self.speedSlider.setFixedWidth(90)
+        self.speedSlider.setToolTip("Execution hızı: sol=hızlı, sağ=yavaş")
+        self.speedSlider.setStyleSheet("""
+            QSlider::groove:horizontal { background:#2a2a2a; height:4px; border-radius:2px; }
+            QSlider::handle:horizontal {
+                background:#4078c8; width:12px; height:12px; margin:-4px 0; border-radius:6px;
+            }
+            QSlider::sub-page:horizontal { background:#4078c8; border-radius:2px; }
+        """)
+
+        self.speedLabel = QLabel("▶▶")
+        self.speedLabel.setStyleSheet("color: #4ade80; font-size: 10px; min-width: 24px;")
+
+        layout.addWidget(lbl)
+        layout.addWidget(self.speedSlider)
+        layout.addWidget(self.speedLabel)
+
+        self.mainToolBar.addSeparator()
+        self.mainToolBar.addWidget(speed_widget)
+        self.speedSlider.valueChanged.connect(self._on_speed_changed)
+
+    def _on_speed_changed(self, value: int):
+        delay_ms = int((value / 10) ** 2 * 2000)
+        self.interpreter.set_execution_speed(delay_ms)
+        labels = ["▶▶", "▶▶", "▶", "▶", "▷▷", "▷▷", "▷", "▷", "▷", "·▷", "··"]
+        colors = [
+            "#4ade80", "#4ade80", "#4ade80", "#86efac", "#fbbf24", "#fbbf24",
+            "#f59e0b", "#f59e0b", "#ef4444", "#ef4444", "#ef4444",
+        ]
+        self.speedLabel.setText(labels[value])
+        self.speedLabel.setStyleSheet(
+            f"color: {colors[value]}; font-size: 10px; min-width: 24px;"
+        )
+
     def _setup_file_menu(self):
+        examples_menu = self.menuFile.addMenu("📚  Örnekler")
+        from collections import defaultdict
+        by_category = defaultdict(list)
+        for name, tpl in TEMPLATES.items():
+            by_category[tpl["category"]].append(name)
+        for category, names in by_category.items():
+            cat_action = QAction(f"── {category} ──", self)
+            cat_action.setEnabled(False)
+            examples_menu.addAction(cat_action)
+            for name in names:
+                action = QAction(f"  {name}", self)
+                action.setToolTip(TEMPLATES[name]["description"])
+                action.triggered.connect(
+                    lambda checked=False, n=name: self._load_template(n)
+                )
+                examples_menu.addAction(action)
+            examples_menu.addSeparator()
+        self.menuFile.addSeparator()
+
         save_action = QAction("💾  Save…", self)
         save_action.setShortcut("Ctrl+S")
         save_action.triggered.connect(self._save_flow)
@@ -682,6 +779,48 @@ class FlowPyApp(QMainWindow):
         load_action.setShortcut("Ctrl+O")
         load_action.triggered.connect(self._load_flow)
         self.menuFile.addAction(load_action)
+
+        export_img_action = QAction("🖼  Flow Görüntüsü Dışa Aktar…", self)
+        export_img_action.setShortcut("Ctrl+Shift+E")
+        export_img_action.triggered.connect(self._export_flow_image)
+        self.menuFile.addAction(export_img_action)
+
+        pdf_action = QAction("📄  PDF Rapor Dışa Aktar…", self)
+        pdf_action.setShortcut("Ctrl+Shift+P")
+        pdf_action.triggered.connect(self._export_pdf_report)
+        self.menuFile.addAction(pdf_action)
+
+        self.menuFile.addSeparator()
+        share_action = QAction("🔗  Paylaşım Linki Oluştur…", self)
+        share_action.setShortcut("Ctrl+Shift+L")
+        share_action.triggered.connect(self._share_flow_link)
+        self.menuFile.addAction(share_action)
+
+        open_link_action = QAction("🔗  Linkten Aç…", self)
+        open_link_action.triggered.connect(self._open_flow_from_link)
+        self.menuFile.addAction(open_link_action)
+
+    def _load_template(self, name: str):
+        if self.registry.get_all_nodes():
+            reply = QMessageBox.question(
+                self, "Şablon Yükle",
+                "Mevcut flow silinecek. Devam edilsin mi?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+        if load_template(name, self.registry, self.current_scene):
+            self._page_states[self._current_page_key] = FlowSerializer.serialize_to_dict(
+                self.registry
+            )
+            self.undo_manager._undo_stack.clear()
+            self.undo_manager._redo_stack.clear()
+            self.undo_manager.save_snapshot()
+            self._update_live_generation()
+            self.statusbar.showMessage(f"✔ Şablon yüklendi: {name}", 3000)
+            self._fit_to_flow()
+        else:
+            self.statusbar.showMessage(f"❌ Şablon yüklenemedi: {name}", 3000)
 
     def _setup_edit_menu(self):
         """Edit menüsünü çalışır undo/redo eylemleriyle doldurur."""
@@ -699,6 +838,42 @@ class FlowPyApp(QMainWindow):
         self.menuEdit.addAction(self._redo_action)
         self.addAction(self._redo_action)
 
+        self.menuEdit.addSeparator()
+        copy_action = QAction("📋  Kopyala", self)
+        copy_action.setShortcut("Ctrl+C")
+        copy_action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        copy_action.triggered.connect(self.current_scene.copy_selected)
+        self.menuEdit.addAction(copy_action)
+
+        paste_action = QAction("📌  Yapıştır", self)
+        paste_action.setShortcut("Ctrl+V")
+        paste_action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        paste_action.triggered.connect(self.current_scene.paste_nodes)
+        self.menuEdit.addAction(paste_action)
+
+        duplicate_action = QAction("⧉  Çoğalt", self)
+        duplicate_action.setShortcut("Ctrl+D")
+        duplicate_action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        duplicate_action.triggered.connect(self._duplicate_selection)
+        self.menuEdit.addAction(duplicate_action)
+
+        self.menuEdit.addSeparator()
+        align_menu = self.menuEdit.addMenu("⬛  Hizala")
+        for label, mode in [
+            ("→ Yatay", "horizontal"),
+            ("↓ Dikey", "vertical"),
+            ("▦ Izgara", "grid"),
+        ]:
+            action = QAction(label, self)
+            action.triggered.connect(
+                lambda checked=False, m=mode: self.current_scene.auto_layout(m)
+            )
+            align_menu.addAction(action)
+
+    def _duplicate_selection(self):
+        self.current_scene.copy_selected()
+        self.current_scene.paste_nodes()
+
     def eventFilter(self, obj, event):
         """Canvas odaktayken Ctrl+Z / Ctrl+Y kısayollarını yakalar."""
         if obj is self.graphicsView and event.type() == QEvent.Type.KeyPress:
@@ -708,6 +883,15 @@ class FlowPyApp(QMainWindow):
                     return True
                 if event.key() == Qt.Key.Key_Y:
                     self._perform_redo()
+                    return True
+                if event.key() == Qt.Key.Key_C:
+                    self.current_scene.copy_selected()
+                    return True
+                if event.key() == Qt.Key.Key_V:
+                    self.current_scene.paste_nodes()
+                    return True
+                if event.key() == Qt.Key.Key_D:
+                    self._duplicate_selection()
                     return True
         return super().eventFilter(obj, event)
 
@@ -773,6 +957,14 @@ class FlowPyApp(QMainWindow):
         restart_tour_action = QAction(t("restart_tour"), self)
         restart_tour_action.triggered.connect(self._restart_guided_tour)
         self.menuView.addAction(restart_tour_action)
+
+        minimap_action = QAction("🗺  Minimap", self)
+        minimap_action.setCheckable(True)
+        minimap_action.setChecked(True)
+        minimap_action.toggled.connect(
+            lambda v: self._minimap.setVisible(v) if hasattr(self, "_minimap") else None
+        )
+        self.menuView.addAction(minimap_action)
 
         self.menuFile.addSeparator()
         self.menuFile.addAction(self._undo_action)
@@ -908,7 +1100,203 @@ class FlowPyApp(QMainWindow):
 
     # ── Toolbar State ─────────────────────────────────────────────────
 
+    def _export_flow_image(self):
+        from PyQt6.QtGui import QImage, QPainter
+        from PyQt6.QtCore import QRectF
+
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Flow'u Dışa Aktar",
+            "flow_diagram.png",
+            "PNG Görüntü (*.png);;SVG Vektör (*.svg)",
+        )
+        if not filepath:
+            return
+        rect = self.current_scene.itemsBoundingRect()
+        if rect.isNull():
+            self.statusbar.showMessage("⚠ Dışa aktarılacak içerik yok.", 3000)
+            return
+        margin = 40
+        rect = rect.adjusted(-margin, -margin, margin, margin)
+        if filepath.lower().endswith(".svg"):
+            from PyQt6.QtSvg import QSvgGenerator
+            generator = QSvgGenerator()
+            generator.setFileName(filepath)
+            generator.setSize(rect.size().toSize())
+            generator.setViewBox(rect)
+            painter = QPainter(generator)
+            self.current_scene.render(painter, QRectF(), rect)
+            painter.end()
+        else:
+            scale = 2
+            image = QImage(
+                int(rect.width() * scale), int(rect.height() * scale),
+                QImage.Format.Format_ARGB32,
+            )
+            image.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(image)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.scale(scale, scale)
+            self.current_scene.render(painter, QRectF(), rect)
+            painter.end()
+            image.save(filepath)
+        self.statusbar.showMessage(f"✔ Dışa aktarıldı: {filepath}", 4000)
+
+    def _export_pdf_report(self):
+        import datetime
+        import re
+        from PyQt6.QtGui import QPainter, QPageSize, QFont, QColor
+        from PyQt6.QtPrintSupport import QPrinter
+        from PyQt6.QtCore import QRectF, QMarginsF
+
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "PDF Rapor Dışa Aktar", "flowpy_report.pdf", "PDF (*.pdf)"
+        )
+        if not filepath:
+            return
+
+        printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+        printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
+        printer.setOutputFileName(filepath)
+        printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+        printer.setPageMargins(QMarginsF(20, 20, 20, 20), QPrinter.Unit.Millimeter)
+
+        painter = QPainter(printer)
+        page_rect = QRectF(printer.pageRect(QPrinter.Unit.DevicePixel))
+        y = 0
+        line_h = 14
+
+        painter.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
+        painter.setPen(QColor("#1e3a6e"))
+        painter.drawText(QRectF(0, y, page_rect.width(), 50), Qt.AlignmentFlag.AlignLeft, "FlowPy")
+        y += 55
+
+        painter.setFont(QFont("Segoe UI", 11))
+        painter.setPen(QColor("#666"))
+        now = datetime.datetime.now().strftime("%d.%m.%Y %H:%M")
+        node_count = len(self.registry.get_all_nodes())
+        edge_count = len(self.registry.edges)
+        painter.drawText(
+            QRectF(0, y, page_rect.width(), 20), Qt.AlignmentFlag.AlignLeft,
+            f"Oluşturulma: {now}  ·  {node_count} düğüm  ·  {edge_count} bağlantı",
+        )
+        y += 30
+        painter.setPen(QColor("#ddd"))
+        painter.drawLine(0, int(y), int(page_rect.width()), int(y))
+        y += 20
+
+        items_rect = self.current_scene.itemsBoundingRect()
+        if not items_rect.isNull():
+            avail_h = page_rect.height() * 0.45
+            avail_w = page_rect.width()
+            self.current_scene.render(painter, QRectF(0, y, avail_w, avail_h), items_rect)
+            y += avail_h + 20
+
+        printer.newPage()
+        y = 0
+        painter.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        painter.setPen(QColor("#1e3a6e"))
+        painter.drawText(
+            QRectF(0, y, page_rect.width(), 30), Qt.AlignmentFlag.AlignLeft, "Üretilen Python Kodu"
+        )
+        y += 40
+        code = self.codeGenOutput.toPlainText()
+        painter.setFont(QFont("Consolas", 9))
+        painter.setPen(QColor("#1a1a1a"))
+        painter.fillRect(QRectF(0, y, page_rect.width(), page_rect.height() - y - 20), QColor("#f8f8f8"))
+        for line in code.split("\n"):
+            if y + line_h > page_rect.height() - 20:
+                printer.newPage()
+                y = 20
+            painter.drawText(QRectF(8, y, page_rect.width() - 16, line_h), Qt.AlignmentFlag.AlignLeft, line)
+            y += line_h
+
+        console_text = self.consoleOutput.toPlainText()
+        if console_text.strip():
+            printer.newPage()
+            y = 0
+            painter.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+            painter.setPen(QColor("#1e3a6e"))
+            painter.drawText(
+                QRectF(0, y, page_rect.width(), 30), Qt.AlignmentFlag.AlignLeft, "Çalıştırma Logu"
+            )
+            y += 40
+            painter.setFont(QFont("Consolas", 9))
+            painter.setPen(QColor("#333"))
+            for line in console_text.split("\n"):
+                if y + line_h > page_rect.height() - 20:
+                    printer.newPage()
+                    y = 20
+                clean = re.sub(r"<[^>]+>", "", line)
+                painter.drawText(QRectF(0, y, page_rect.width(), line_h), Qt.AlignmentFlag.AlignLeft, clean)
+                y += line_h
+
+        painter.end()
+        self.statusbar.showMessage(f"✔ PDF raporu oluşturuldu: {filepath}", 4000)
+
+    def _share_flow_link(self):
+        import json
+        import base64
+        import zlib
+
+        flow_dict = FlowSerializer.serialize_to_dict(self.registry)
+        json_bytes = json.dumps(flow_dict, ensure_ascii=False).encode("utf-8")
+        compressed = zlib.compress(json_bytes, level=9)
+        encoded = base64.urlsafe_b64encode(compressed).decode("ascii")
+        share_url = f"flowpy://share#{encoded}"
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Flow'u Paylaş")
+        dialog.setFixedSize(480, 160)
+        dialog.setStyleSheet("background: #1e1e1e; color: #ddd;")
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.addWidget(QLabel("Bu linki kopyala ve arkadaşınla paylaş:"))
+        url_field = QLineEdit(share_url)
+        url_field.setReadOnly(True)
+        url_field.selectAll()
+        copy_btn = QPushButton("📋  Panoya Kopyala")
+
+        def do_copy():
+            QApplication.clipboard().setText(share_url)
+            copy_btn.setText("✔  Kopyalandı!")
+
+        copy_btn.clicked.connect(do_copy)
+        layout.addWidget(url_field)
+        layout.addWidget(copy_btn)
+        node_count = len(self.registry.get_all_nodes())
+        layout.addWidget(QLabel(f"{node_count} düğüm · {len(encoded) / 1024:.1f} KB link boyutu"))
+        dialog.exec()
+
+    def _open_flow_from_link(self):
+        import json
+        import base64
+        import zlib
+
+        url, ok = QInputDialog.getText(self, "Link ile Aç", "FlowPy paylaşım linkini yapıştır:")
+        if not ok or not url.strip():
+            return
+        try:
+            encoded = url.split("#", 1)[1] if "#" in url else url.strip()
+            compressed = base64.urlsafe_b64decode(encoded.encode("ascii"))
+            flow_dict = json.loads(zlib.decompress(compressed).decode("utf-8"))
+            FlowSerializer.deserialize_from_dict(
+                flow_dict, self.registry, self.current_scene
+            )
+            self._page_states[self._current_page_key] = FlowSerializer.serialize_to_dict(
+                self.registry
+            )
+            self.undo_manager.save_snapshot()
+            self._update_live_generation()
+            self.statusbar.showMessage("✔ Flow linkten yüklendi.", 3000)
+        except Exception as e:
+            self.statusbar.showMessage(f"❌ Link geçersiz: {e}", 4000)
+
     def _update_toolbar_state(self, is_active: bool, is_paused: bool):
+        if is_active and not self._was_flow_active:
+            if hasattr(self, "sparkline_panel"):
+                self.sparkline_panel.reset()
+        self._was_flow_active = is_active
+
         if not is_active:
             self.actionRunFlow.setEnabled(True)
             self.actionStepFlow.setEnabled(True)

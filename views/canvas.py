@@ -188,6 +188,7 @@ class FlowScene(QGraphicsScene):
         self._connecting = False       # Bağlantı çizimi aktif mi?
         self._source_port = None       # Başlangıç portu
         self._temp_edge = None         # Geçici Bezier çizgisi
+        self._clipboard: list[dict] = []
 
     # ══════════════════════════════════════════════════════════════════
     #  Bağlantı (Edge) Oluşturma — Port tıklama ile
@@ -395,7 +396,7 @@ class FlowScene(QGraphicsScene):
     # ══════════════════════════════════════════════════════════════════
 
     def keyPressEvent(self, event):
-        """Delete tuşu ile seçili öğeleri sil; Ctrl+Z/Y ana pencereye bırakılır."""
+        """Klavye kısayolları: sil, kopyala, yapıştır, çoğalt, seç."""
         if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
             self.delete_selected()
             event.accept()
@@ -407,7 +408,86 @@ class FlowScene(QGraphicsScene):
             if event.key() == Qt.Key.Key_Y:
                 event.ignore()
                 return
+            if event.key() == Qt.Key.Key_C:
+                self.copy_selected()
+                event.accept()
+                return
+            if event.key() == Qt.Key.Key_V:
+                self.paste_nodes()
+                event.accept()
+                return
+            if event.key() == Qt.Key.Key_A:
+                self._select_all()
+                event.accept()
+                return
+            if event.key() == Qt.Key.Key_D:
+                self.copy_selected()
+                self.paste_nodes()
+                event.accept()
+                return
         super().keyPressEvent(event)
+
+    def copy_selected(self):
+        """Seçili node'ları clipboard'a kopyalar."""
+        self._clipboard.clear()
+        selected_nodes = [i for i in self.selectedItems() if isinstance(i, BaseNode)]
+        if not selected_nodes:
+            return
+        center_x = sum(n.pos().x() for n in selected_nodes) / len(selected_nodes)
+        center_y = sum(n.pos().y() for n in selected_nodes) / len(selected_nodes)
+        for node in selected_nodes:
+            self._clipboard.append({
+                "title": node.title,
+                "properties": dict(node.properties),
+                "rel_x": node.pos().x() - center_x,
+                "rel_y": node.pos().y() - center_y,
+                "_custom_color": getattr(node, "_custom_color", None),
+            })
+
+    def paste_nodes(self):
+        """Clipboard'daki node'ları sahneye yapıştırır."""
+        if not self._clipboard:
+            return
+        paste_x, paste_y = 40, 40
+        self.clearSelection()
+        for clip in self._clipboard:
+            node = BaseNode(title=clip["title"])
+            node.properties.update(clip["properties"])
+            if clip.get("_custom_color"):
+                node._custom_color = clip["_custom_color"]
+            node_id = self.registry.add_node(node)
+            node.node_id = node_id
+            self.addItem(node)
+            node.setPos(paste_x + clip["rel_x"], paste_y + clip["rel_y"])
+            node.setSelected(True)
+        self.history_changed.emit()
+
+    def auto_layout(self, mode: str = "horizontal"):
+        """Seçili veya tüm node'ları otomatik hizalar."""
+        import math
+        nodes = [i for i in self.selectedItems() if isinstance(i, BaseNode)]
+        if not nodes:
+            nodes = [i for i in self.items() if isinstance(i, BaseNode)]
+        if not nodes:
+            return
+        spacing_x, spacing_y = 200, 120
+        if mode == "horizontal":
+            nodes.sort(key=lambda n: n.pos().x())
+            start_x = nodes[0].pos().x()
+            base_y = sum(n.pos().y() for n in nodes) / len(nodes)
+            for i, node in enumerate(nodes):
+                node.setPos(start_x + i * spacing_x, base_y)
+        elif mode == "vertical":
+            nodes.sort(key=lambda n: n.pos().y())
+            base_x = sum(n.pos().x() for n in nodes) / len(nodes)
+            start_y = nodes[0].pos().y()
+            for i, node in enumerate(nodes):
+                node.setPos(base_x, start_y + i * spacing_y)
+        elif mode == "grid":
+            cols = max(1, int(math.ceil(math.sqrt(len(nodes)))))
+            for i, node in enumerate(nodes):
+                node.setPos((i % cols) * spacing_x, (i // cols) * spacing_y)
+        self.history_changed.emit()
 
     def contextMenuEvent(self, event):
         """Sağ tık bağlam menüsü."""
@@ -425,6 +505,23 @@ class FlowScene(QGraphicsScene):
             target_node = item.parentItem()
 
         if target_node and isinstance(target_node, BaseNode):
+            bp_text = (
+                "🔴 Breakpoint Kaldır" if target_node._has_breakpoint
+                else "🔴 Breakpoint Ekle"
+            )
+            bp_action = QAction(bp_text, menu)
+
+            def toggle_bp(node=target_node):
+                node.toggle_breakpoint()
+                scene = node.scene()
+                if scene and scene.views():
+                    main = scene.views()[0].window()
+                    if hasattr(main, "interpreter"):
+                        main.interpreter.toggle_breakpoint(node.node_id)
+
+            bp_action.triggered.connect(toggle_bp)
+            menu.addAction(bp_action)
+
             edit_action = QAction(f"✏️  Düzenle: {target_node.title}", menu)
             edit_action.triggered.connect(
                 lambda: target_node.mouseDoubleClickEvent(None)
