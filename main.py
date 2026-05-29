@@ -146,10 +146,10 @@ class FlowPyApp(QMainWindow):
         self._setup_zoom_bar()
 
         # ── 11.5 Sayfa durumları (Page-1 / Page-2) ─────────────────
-        self._current_page = 1
+        self._current_page_key = "page1"
         self._page_states = {
-            1: FlowSerializer.serialize_to_dict(self.registry),
-            2: {"nodes": [], "edges": []},
+            "page1": FlowSerializer.serialize_to_dict(self.registry),
+            "page2": {"nodes": [], "edges": []},
         }
 
         # ── 12. Pencere başlığı ──────────────────────────────────────
@@ -172,14 +172,36 @@ class FlowPyApp(QMainWindow):
         scene.selectionChanged.connect(self._update_style_panel)
 
     def _switch_page(self, page_key: str):
-        """Sayfa butonlarına basıldığında sahneyi değiştirir."""
-        self.current_scene = self.scenes[page_key]
+        """Sayfalar arasında geçiş yapar; her sayfanın akış durumunu ayrı saklar."""
+        if page_key == self._current_page_key:
+            return
+
+        self._page_states[self._current_page_key] = FlowSerializer.serialize_to_dict(
+            self.registry
+        )
+
+        target_scene = self.scenes[page_key]
+        target_state = self._page_states.get(page_key, {"nodes": [], "edges": []})
+        FlowSerializer.deserialize_from_dict(
+            target_state, self.registry, target_scene
+        )
+
+        self._current_page_key = page_key
+        self.current_scene = target_scene
         self.graphicsView.setScene(self.current_scene)
         self.undo_manager.scene = self.current_scene
         self._connect_scene_signals(self.current_scene)
+
         self._update_properties_panel()
         self._update_style_panel()
-        self.statusbar.showMessage(f"Switched to {page_key.capitalize()}.")
+        self._update_variable_watcher({})
+        self._update_live_generation()
+
+        self.undo_manager._undo_stack.clear()
+        self.undo_manager._redo_stack.clear()
+        self.undo_manager.save_snapshot()
+
+        self.statusbar.showMessage(f"Switched to {page_key.capitalize()}.", 2500)
 
     # ── Cetvel Kurulumu ──────────────────────────────────────────────
 
@@ -402,19 +424,16 @@ class FlowPyApp(QMainWindow):
         # Pan mode toggle
         self.panModeBtn.toggled.connect(self._toggle_pan_mode)
 
-        # Page tabs (tek sahne, simüle edilmiş sekmeler)
-        self.pageTab1Btn.clicked.connect(lambda: self._switch_page("page1"))
-        self.pageTab2Btn.clicked.connect(lambda: self._switch_page("page2"))
-
+        # Page tabs
         page_group = QButtonGroup(self)
         page_group.addButton(self.pageTab1Btn)
         page_group.addButton(self.pageTab2Btn)
         page_group.setExclusive(True)
         self.pageTab1Btn.clicked.connect(
-            lambda checked: checked and self._switch_page(1)
+            lambda checked: checked and self._switch_page("page1")
         )
         self.pageTab2Btn.clicked.connect(
-            lambda checked: checked and self._switch_page(2)
+            lambda checked: checked and self._switch_page("page2")
         )
 
     def _zoom_in(self):
@@ -457,39 +476,12 @@ class FlowPyApp(QMainWindow):
 
     def _fit_to_flow(self):
         """Tüm akışı görünür alana sığdırır."""
-        rect = self.scene.itemsBoundingRect()
+        rect = self.current_scene.itemsBoundingRect()
         if rect.isNull() or rect.isEmpty():
             return
         self.graphicsView.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
         self._zoom_level = self.graphicsView.transform().m11()
         self._update_zoom_label()
-
-    def _switch_page(self, target_page: int):
-        """Sayfalar arasında geçiş yapar ve her sayfanın akış durumunu korur."""
-        if target_page == self._current_page:
-            return
-
-        # Mevcut sayfanın durumunu sakla
-        self._page_states[self._current_page] = FlowSerializer.serialize_to_dict(
-            self.registry
-        )
-
-        # Hedef sayfanın durumunu yükle
-        target_state = self._page_states.get(target_page, {"nodes": [], "edges": []})
-        FlowSerializer.deserialize_from_dict(target_state, self.registry, self.scene)
-
-        self._current_page = target_page
-        self._update_properties_panel()
-        self._update_style_panel()
-        self._update_variable_watcher({})
-        self._update_live_generation()
-
-        # Sayfa değişiminde undo geçmişini yeni durumla başlat
-        self.undo_manager._undo_stack.clear()
-        self.undo_manager._redo_stack.clear()
-        self.undo_manager.save_snapshot()
-
-        self.statusbar.showMessage(f"Switched to Page-{target_page}", 2500)
 
     # ── Dosya Menüsü ─────────────────────────────────────────────────
 
