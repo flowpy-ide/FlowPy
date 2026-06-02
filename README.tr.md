@@ -5,7 +5,7 @@ Algoritmik akışları **sürükle-bırak düğümlerle** modelleyip anında ça
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)]()
 [![PyQt6](https://img.shields.io/badge/UI-PyQt6-41cd52?style=flat-square)]()
 [![Platform](https://img.shields.io/badge/platform-Windows-brightgreen?style=flat-square)]()
-[![License](https://img.shields.io/badge/license-UNKNOWN-lightgrey?style=flat-square)](#lisans)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 
 > 🌐 [English README →](README.en.md)
 
@@ -390,12 +390,11 @@ Mevcut `core/` → `models/` → `views/` mimarisine ve TR/EN dil desteğine (`c
 
 ## Lisans
 
-Bu depo henüz bir `LICENSE` dosyası içermemektedir. Resmi dağıtımdan önce uygun bir açık kaynak lisansı ekleyin.
+Bu proje **MIT Lisansı** ile lisanslanmıştır. Ayrıntılar için [LICENSE](LICENSE) dosyasına bakın.
 
 ---
 
 ## Destek
 
 - 🐛 **Hata & özellik talebi:** `https://github.com/flowpy-ide/FlowPy/issues`
-- 👤 **Proje sahipleri:** Erkan TURGUT, Aslı AYDIN
 - 📦 **Sürüm notları:** GitHub Releases sayfası

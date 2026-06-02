@@ -5,7 +5,7 @@ A desktop IDE for modeling and executing algorithm flows with **drag-and-drop no
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square)]()
 [![PyQt6](https://img.shields.io/badge/UI-PyQt6-41cd52?style=flat-square)]()
 [![Platform](https://img.shields.io/badge/platform-Windows-brightgreen?style=flat-square)]()
-[![License](https://img.shields.io/badge/license-UNKNOWN-lightgrey?style=flat-square)](#license)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 
 > 🌐 [Türkçe README →](README.tr.md)
 
@@ -391,12 +391,11 @@ Please follow the existing `core/` → `models/` → `views/` architecture and m
 
 ## License
 
-This repository does not yet contain a `LICENSE` file. Add an appropriate open source license before official distribution.
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
 
 ---
 
 ## Support
 
 - 🐛 **Issues & feature requests:** `https://github.com/flowpy-ide/FlowPy/issues`
-- 👤 **Maintainers:** Erkan TURGUT, Aslı AYDIN
 - 📦 **Release notes:** GitHub Releases page
