@@ -155,6 +155,5 @@ Lütfen kod stiline ve mevcut `core/`, `models/`, `views/` mimarisine uyun.
 
 ## Destek
 
-- Hata ve özellik talepleri: `https://github.com/<ORG>/<REPO>/issues`
-- Proje sahipleri: Erkan TURGUT, Aslı AYDIN
-- Sürüm notları: GitHub Releases sayfası
+- Hata ve özellik talepleri: `(https://github.com/flowpy-ide/FlowPy/issues)`
+- Sürüm notları: GitHub Releases sayfası(https://github.com/flowpy-ide/FlowPy/releases/tag/v1.0.0)
