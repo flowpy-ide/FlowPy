@@ -100,7 +100,7 @@ class Port(QGraphicsEllipseItem):
 class BaseNode(QGraphicsItem):
     """Sahneye yerleştirilebilen, sürüklenebilir temel düğüm."""
 
-    WIDTH = 160
+    WIDTH = 180
     HEIGHT = 80
     CORNER_RADIUS = 10
 
@@ -383,27 +383,27 @@ class BaseNode(QGraphicsItem):
 
     def _text_layout_rects(self) -> tuple[QRectF, QRectF]:
         """Şekle göre başlık ve alt satır alanları (ortalanmış metin)."""
-        m = 10.0
+        m = 8.0  # Daha dar margin
         w = self.WIDTH - 2 * m
         shape = get_node_shape(self.title)
         if shape == "diamond":
             return (
-                QRectF(m, 20, w, 30),
-                QRectF(m, 50, w, 24),
+                QRectF(m, 18, w, 32),  # Başlık alanı
+                QRectF(m, 50, w, 22),  # Özet alanı
             )
         if shape == "loop":
             return (
-                QRectF(m, 16, w, 28),
-                QRectF(m, 44, w, 28),
+                QRectF(m, 14, w, 30),
+                QRectF(m, 44, w, 26),
             )
         if shape in ("terminal", "terminal_stop"):
             return (
-                QRectF(m, 14, w, 28),
-                QRectF(m, 42, w, 26),
+                QRectF(m, 12, w, 30),
+                QRectF(m, 42, w, 24),
             )
         return (
-            QRectF(m, 8, w, 32),
-            QRectF(m, 42, w, 30),
+            QRectF(m, 6, w, 34),  # Başlık alanı
+            QRectF(m, 40, w, 28),  # Özet alanı
         )
 
     def paint(self, painter: QPainter, option, widget=None):
@@ -418,95 +418,128 @@ class BaseNode(QGraphicsItem):
 
         title_rect, summary_rect = self._text_layout_rects()
         display_title = t_node(self.title)
-        title_pt = 8 if len(display_title) > 18 else (9 if len(display_title) > 14 else 10)
+        
+        # Başlık: Font boyutunu uzunluğa göre ayarla (daha agresif)
+        if len(display_title) > 18:
+            title_pt = 6
+        elif len(display_title) > 14:
+            title_pt = 7
+        else:
+            title_pt = 8
+        
         title_font = QFont("Segoe UI", title_pt, QFont.Weight.Bold)
         painter.setFont(title_font)
         painter.setPen(QPen(self._color_text))
         align = Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
         metrics = painter.fontMetrics()
         elided_title = metrics.elidedText(
-            display_title, Qt.TextElideMode.ElideRight, int(title_rect.width())
+            display_title, Qt.TextElideMode.ElideMiddle, int(title_rect.width() - 4)
         )
         painter.drawText(title_rect, align, elided_title)
 
+        # Özet/Durum: Daha küçük font, sıkı metin kısaltma
         summary = self._get_property_summary()
         if summary:
-            small_font = QFont("Segoe UI", 7)
+            # Metin uzunluğuna göre font boyutunu azalt
+            summary_font_size = 5 if len(summary) > 25 else 6
+            small_font = QFont("Segoe UI", summary_font_size)
             painter.setFont(small_font)
             painter.setPen(QPen(self._color_text_dim))
             sm = painter.fontMetrics()
             elided = sm.elidedText(
-                summary, Qt.TextElideMode.ElideRight, int(summary_rect.width())
+                summary, Qt.TextElideMode.ElideRight, int(summary_rect.width() - 4)
             )
             painter.drawText(summary_rect, align, elided)
 
+        # Diamond node'lar için port etiketleri (daha kısı)
         if get_node_shape(self.title) == "diamond":
-            label_font = QFont("Segoe UI", 7, QFont.Weight.Bold)
+            label_font = QFont("Segoe UI", 6, QFont.Weight.Bold)
             painter.setFont(label_font)
             for i, port in enumerate(self.output_ports):
                 y_frac = port.pos().y() / self.HEIGHT
                 painter.setPen(QPen(QColor("#4ade80" if i == 0 else "#f59e0b")))
-                label = (port.label[:5] if port.label else str(i))
+                label = (port.label[:3] if port.label else str(i))  # max 3 char
                 painter.drawText(
-                    QRectF(self.WIDTH - 34, y_frac * self.HEIGHT - 10, 30, 12),
-                    Qt.AlignmentFlag.AlignRight,
+                    QRectF(self.WIDTH - 32, y_frac * self.HEIGHT - 9, 28, 11),
+                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
                     label,
                 )
         elif self.title in ("While", "For"):
-            label_font = QFont("Segoe UI", 7, QFont.Weight.Bold)
+            label_font = QFont("Segoe UI", 6, QFont.Weight.Bold)
             painter.setFont(label_font)
             for i, port in enumerate(self.output_ports):
                 y_frac = port.pos().y() / self.HEIGHT
                 painter.setPen(QPen(QColor("#a78bfa" if i == 0 else "#8b5cf6")))
-                label = "loop" if i == 0 else "out"
+                label = "ΣΕ" if i == 0 else "ÇIK"  # Kısaltılmış Türkçe
                 painter.drawText(
-                    QRectF(self.WIDTH - 34, y_frac * self.HEIGHT - 10, 30, 12),
-                    Qt.AlignmentFlag.AlignRight,
+                    QRectF(self.WIDTH - 32, y_frac * self.HEIGHT - 9, 28, 11),
+                    Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
                     label,
                 )
 
     def _get_property_summary(self) -> str:
         hint = tn("hint_double_click")
+        max_len = 22  # Katı karakter sınırı
+        
         if self.title == "Decision":
             cond = self.properties.get("condition", "")
-            return f"if {cond}" if cond else hint
+            text = f"if {cond}" if cond else hint
+            return text[:max_len]
         if self.title == "While":
             cond = self.properties.get("condition", "")
-            return f"while {cond}" if cond else hint
+            text = f"while {cond}" if cond else hint
+            return text[:max_len]
         if self.title == "If Elif Else":
             c = self.properties.get("condition_if", "")
-            return f"if {c}" if c else hint
+            text = f"if {c}" if c else hint
+            return text[:max_len]
         if self.title == "Process":
             code = self.properties.get("code", "")
             if code:
-                return code.strip().split("\n")[0]
+                first_line = code.strip().split("\n")[0]
+                return first_line[:max_len]
             return hint
         if self.title == "Start":
             vars_text = self.properties.get("variables", "")
             if vars_text:
                 count = len([l for l in vars_text.strip().split("\n") if l.strip()])
-                return tn("hint_var_count", n=count)
+                return tn("hint_var_count", n=count)[:max_len]
             return tn("hint_start")
         if self.title == "Variable":
             n = self.properties.get("name", "")
-            return f"{n} = {self.properties.get('value', '')}" if n else hint
+            val = self.properties.get("value", "")
+            if n:
+                return f"{n}={val}"[:max_len]
+            return hint
         if self.title in ("Break", "Continue"):
             tag = self.properties.get("tag", "").strip()
             desc = self.properties.get("description", "").strip()
             if tag:
-                return tag
+                return tag[:max_len]
             if desc:
-                return desc
+                return desc[:max_len]
             return hint
+        # Bazı düğümler çok hassas - daha kısa
+        if self.title in ("Try Except", "Assert", "Search"):
+            schema = NODE_PROPERTY_SCHEMA.get(self.title, [])
+            if schema and len(schema) > 0:
+                prop_key, _, default = schema[0]
+                val = self.properties.get(prop_key, default)
+                if val:
+                    return str(val)[:18]
+            return hint
+        
         schema = NODE_PROPERTY_SCHEMA.get(self.title, [])
         if schema:
             parts = []
-            for prop_key, _, default in schema[:2]:
+            for prop_key, _, default in schema[:1]:  # Sadece ilk property
                 val = self.properties.get(prop_key, default)
                 if val:
-                    parts.append(f"{prop_key}={val}")
+                    part_str = str(val)[:18]  # Her part max 18 char
+                    parts.append(part_str)
             if parts:
-                return " · ".join(parts)[:48]
+                result = " ".join(parts)[:22]
+                return result
             return hint
         return ""
 

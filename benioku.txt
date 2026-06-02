@@ -1,0 +1,74 @@
+====================================================
+  FlowPy — Modern Algoritma IDE
+  Sürüm: 1.0  |  Platform: Windows 10/11 (64-bit)
+====================================================
+
+PROJE SAHİPLERİ
+---------------
+  Erkan TURGUT
+  Aslı AYDIN
+
+AÇIKLAMA
+--------
+FlowPy, sürükle-bırak düğümlerle algoritma akışları oluşturmanızı,
+adım adım veya tam hızda çalıştırmanızı ve Python/Java/C/C++/JS/
+Pseudocode olarak kod üretmenizi sağlayan masaüstü bir IDE'dir.
+
+HAZIR EXE İLE ÇALIŞTIRMA (Python gerekmez)
+------------------------------------------
+1. dist\FlowPy.exe dosyasını çalıştırın.
+2. Windows SmartScreen uyarısı çıkarsa:
+   "Daha fazla bilgi" → "Yine de çalıştır" seçeneğini tıklayın.
+3. Uygulama ilk açılışta karşılama ekranı ve eğitim turu gösterir.
+
+KAYNAK KODDAN ÇALIŞTIRMA
+-------------------------
+Gereksinimler: Python 3.10+, PyQt6
+
+  cd FlowPy
+  python -m venv .venv
+  .venv\Scripts\Activate.ps1
+  pip install -r requirements.txt
+  python main.py
+
+EXE'Yİ YENİDEN OLUŞTURMA
+--------------------------
+  pip install pyinstaller
+  cd FlowPy
+  pyinstaller FlowPy.spec
+
+PROJE YAPISI
+------------
+  main.py            → Uygulama giriş noktası
+  core/              → Yorumlayıcı, kod üretici, doğrulama, ayarlar
+  models/            → Düğüm ve kenar veri modelleri
+  views/             → Qt arayüz bileşenleri (.ui dahil)
+  created_flows/     → Hazır örnek .flowpy akış dosyaları
+  docs/              → Belgeler, UML diyagramları, ikon
+  dist/FlowPy.exe    → Derlenmiş çalıştırılabilir uygulama
+
+KULLANIM KILAVUZU
+-----------------
+1. Uygulamayı başlatın; açılış ekranında örnek akışla veya boş
+   canvas ile başlayın.
+2. Eğitim turu açılır — adımları takip edin (veya atlayın).
+3. Sol paneldeki Düğüm Paleti'nden düğümleri canvas'a sürükleyin.
+4. Düğüme çift tıklayarak özelliklerini düzenleyin.
+5. Düğüm çıkış/giriş noktalarını birbirine bağlayın.
+6. Üst araç çubuğundaki "Run All" ile akışı çalıştırın.
+7. Alt panelde konsol çıktısını ve değişkenleri izleyin.
+8. Dosya > Kaydet ile .flowpy olarak saklayın.
+
+SORUN GİDERME
+-------------
+• "No such file or directory" hatası: FlowPy.exe'yi doğrudan
+  çalıştırın, başka bir klasöre taşımayın.
+• Bağımlılık eksikliği (kaynak kod): pip install -r requirements.txt
+• Akış yüklenmiyor: created_flows/tam_demo.flowpy örneğini deneyin.
+
+İLETİŞİM
+--------
+Proje deposu: GitHub (README.md içindeki bağlantıya bakın)
+Sorun bildirimi: Issues bölümünden yeni konu açın.
+
+====================================================

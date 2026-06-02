@@ -1,21 +1,33 @@
-# FlowPy
+# FlowPy — Modern Algorithm IDE
 
-Bu depo için iki dilli README desteği eklendi. Sayfayı görüntülerken istediğiniz dili seçebilirsiniz.
-
-## Dil Seçimi
-
-- [Türkçe README](README.tr.md)
-- [English README](README.en.md)
-
-> GitHub doğrudan dil algılama yapmadığı için seçiminizi yukarıdaki bağlantılardan yapabilirsiniz.
+> Algoritmik akışları sürükle-bırak düğümlerle modelleyip anında çalıştıran, otomatik Python kodu üreten masaüstü IDE.
+>
+> A desktop IDE for modeling and executing algorithm flows with drag-and-drop nodes and automatic code generation.
 
 ---
 
-### README dosyaları
+## Dil Seçimi / Language
 
-- `README.tr.md` — Türkçe kapsamlı ürün açıklaması
-- `README.en.md` — English product-ready documentation
+| 🇹🇷 Türkçe | 🇬🇧 English |
+|-----------|-----------|
+| [README.tr.md](README.tr.md) | [README.en.md](README.en.md) |
 
 ---
 
+### Hızlı Başlangıç / Quick Start
 
+```powershell
+cd FlowPy
+python -m venv .venv && .\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python main.py
+```
+
+---
+
+### README Dosyaları
+
+| Dosya | İçerik |
+|-------|--------|
+| `README.tr.md` | Türkçe — Tam özellik listesi, arayüz kılavuzu, düğüm referansı, klavye kısayolları |
+| `README.en.md` | English — Full feature list, interface guide, node reference, keyboard shortcuts |

@@ -35,7 +35,7 @@ from models.node import BaseNode
 from core.node_visuals import make_palette_icon
 from core.templates import TEMPLATES, load_template
 
-BASE_DIR = os.path.dirname(__file__)
+BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
 APP_ICON_PATH = os.path.join(BASE_DIR, "docs", "icon-svg.svg")
 
 
@@ -59,7 +59,7 @@ class FlowPyApp(QMainWindow):
         super().__init__()
 
         # ── 1. UI dosyasını yükle ────────────────────────────────────
-        ui_path = os.path.join(os.path.dirname(__file__), "views", "mainwindow.ui")
+        ui_path = os.path.join(BASE_DIR, "views", "mainwindow.ui")
         uic.loadUi(ui_path, self)
 
         # ── 2. Merkezi kayıt defterini oluştur ──────────────────────
@@ -68,8 +68,9 @@ class FlowPyApp(QMainWindow):
         # ── 3. Sahneyi oluştur ve graphicsView'a bağla ──────────────
         self.scenes = {
             "page1": FlowScene(registry=self.registry),
-            "page2": FlowScene(registry=self.registry)
+            "page2": FlowScene(registry=self.registry),
         }
+        self._page_count = 2
         self.current_scene = self.scenes["page1"]
         self.graphicsView.setScene(self.current_scene)
         self.graphicsView.setAcceptDrops(True)
@@ -173,16 +174,86 @@ class FlowPyApp(QMainWindow):
         self.setWindowTitle(t("app_title"))
         if hasattr(self, "actionRunFlow"):
             self.actionRunFlow.setText(t("run_all"))
+        if hasattr(self, "actionStepFlow"):
+            self.actionStepFlow.setText(t("step"))
+        if hasattr(self, "actionStopFlow"):
+            self.actionStopFlow.setText(t("stop"))
         if hasattr(self, "nodePanelDock"):
             self.nodePanelDock.setWindowTitle(t("node_palette"))
         if hasattr(self, "rightPanelDock"):
             self.rightPanelDock.setWindowTitle(t("inspector"))
         if hasattr(self, "consoleDock"):
             self.consoleDock.setWindowTitle(t("console_output"))
+        
+        # Tab başlıklarını güncelle
+        if hasattr(self, "rightTabWidget"):
+            self.rightTabWidget.setTabText(0, t("properties"))
+            self.rightTabWidget.setTabText(1, t("variables"))
+            self.rightTabWidget.setTabText(2, t("code"))
+        
+        # Style alt-tab başlıkları
+        if hasattr(self, "styleTabWidget"):
+            self.styleTabWidget.setTabText(0, t("colors"))
+            self.styleTabWidget.setTabText(1, t("style_customizer"))
+        
+        # Placeholders ve label metinleri
+        if hasattr(self, "propDetails"):
+            self.propDetails.setPlaceholderText(t("select_node"))
+        if hasattr(self, "nodeSearchBar"):
+            self.nodeSearchBar.setPlaceholderText(t("search"))
+        
+        # Variable tablo başlıkları
+        if hasattr(self, "variableTable"):
+            self.variableTable.setHorizontalHeaderItem(0, QTableWidgetItem(t("variable")))
+            self.variableTable.setHorizontalHeaderItem(1, QTableWidgetItem(t("value")))
+        
+        # Code tab butonları
+        if hasattr(self, "codeGenCopyBtn"):
+            self.codeGenCopyBtn.setText(t("copy"))
+        if hasattr(self, "codeGenSaveBtn"):
+            self.codeGenSaveBtn.setText(t("export"))
+        
+        # Layers butonu
+        if hasattr(self, "layerBtn"):
+            self.layerBtn.setToolTip(t("layers"))
+        
+        # Style customizer UI
+        if hasattr(self, "opacityLabel"):
+            self.opacityLabel.setText(t("opacity"))
+        if hasattr(self, "borderStyleLabel"):
+            self.borderStyleLabel.setText(t("border_style"))
+        if hasattr(self, "lineStyleLabel"):
+            self.lineStyleLabel.setText(t("line_style"))
+        
+        # Code language combo
+        if hasattr(self, "codeGenLangCombo"):
+            self.codeGenLangCombo.setItemText(0, t("pseudocode"))
+            self.codeGenLangCombo.setItemText(1, t("python"))
+            self.codeGenLangCombo.setItemText(2, t("c_lang"))
+            self.codeGenLangCombo.setItemText(3, t("java"))
+        
+        # Border/Line style combo
+        if hasattr(self, "borderStyleCombo"):
+            self.borderStyleCombo.setItemText(0, t("solid"))
+            self.borderStyleCombo.setItemText(1, t("dashed"))
+            self.borderStyleCombo.setItemText(2, t("dotted"))
+            self.borderStyleCombo.setItemText(3, t("none"))
+        
+        if hasattr(self, "lineStyleCombo"):
+            self.lineStyleCombo.setItemText(0, t("solid"))
+            self.lineStyleCombo.setItemText(1, t("dashed"))
+            self.lineStyleCombo.setItemText(2, t("dotted"))
+        
+        # propNodeTitle
+        if hasattr(self, "propNodeTitle"):
+            if self.propNodeTitle.text() == "No Node Selected":
+                self.propNodeTitle.setText(t("no_node_selected"))
+        
         if hasattr(self, "nodeTreeWidget"):
             self._setup_node_tree()
         if hasattr(self, "_speed_lbl_widget"):
             self._speed_lbl_widget.setText(tn("speed_label"))
+
 
     def _maybe_show_welcome(self):
         """İlk açılışta karşılama ekranını gösterir."""
@@ -303,6 +374,29 @@ class FlowPyApp(QMainWindow):
         self.undo_manager.save_snapshot()
 
         self.statusbar.showMessage(f"Switched to {page_key.capitalize()}.", 2500)
+
+    def _add_new_page(self):
+        """Yeni bir sayfa (canvas) ekler ve o sayfaya geçer."""
+        self._page_count += 1
+        page_key = f"page{self._page_count}"
+        page_num = self._page_count
+
+        self.scenes[page_key] = FlowScene(registry=self.registry)
+        self._page_states[page_key] = {"nodes": [], "edges": []}
+
+        btn = QPushButton(f"Page-{page_num}")
+        btn.setCheckable(True)
+        btn.setChecked(False)
+        btn.setStyleSheet(self.pageTab1Btn.styleSheet())
+        self._page_button_group.addButton(btn)
+        btn.clicked.connect(lambda checked, k=page_key: checked and self._switch_page(k))
+
+        layout = self.bottomBar.layout()
+        add_btn_idx = layout.indexOf(self.addPageBtn)
+        layout.insertWidget(add_btn_idx, btn)
+
+        btn.setChecked(True)
+        self._switch_page(page_key)
 
     # ── Cetvel Kurulumu ──────────────────────────────────────────────
 
@@ -625,18 +719,24 @@ class FlowPyApp(QMainWindow):
 
         # Pan mode toggle
         self.panModeBtn.toggled.connect(self._toggle_pan_mode)
+        
+        # Layers button
+        if hasattr(self, "layerBtn"):
+            self.layerBtn.clicked.connect(self._show_layers_dialog)
 
         # Page tabs
-        page_group = QButtonGroup(self)
-        page_group.addButton(self.pageTab1Btn)
-        page_group.addButton(self.pageTab2Btn)
-        page_group.setExclusive(True)
+        self._page_button_group = QButtonGroup(self)
+        self._page_button_group.addButton(self.pageTab1Btn)
+        self._page_button_group.addButton(self.pageTab2Btn)
+        self._page_button_group.setExclusive(True)
         self.pageTab1Btn.clicked.connect(
             lambda checked: checked and self._switch_page("page1")
         )
         self.pageTab2Btn.clicked.connect(
             lambda checked: checked and self._switch_page("page2")
         )
+        if hasattr(self, "addPageBtn"):
+            self.addPageBtn.clicked.connect(self._add_new_page)
 
     def _zoom_in(self):
         factor = 1.2
@@ -687,6 +787,37 @@ class FlowPyApp(QMainWindow):
         self._zoom_level = self.graphicsView.transform().m11()
         self._update_zoom_label()
 
+    def _show_layers_dialog(self):
+        """Layers/Katmanlar yönetimi dialog'unu gösterir."""
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QCheckBox, QLabel
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle(t("layers"))
+        dialog.setGeometry(100, 100, 300, 400)
+        
+        layout = QVBoxLayout()
+        
+        # Başlık
+        title = QLabel(f"<b>{t('layers')}</b>")
+        layout.addWidget(title)
+        
+        # Node kategorileri (NODE_CATEGORIES'den)
+        from core.i18n_nodes import NODE_CATEGORIES, t_cat
+        
+        checkboxes = {}
+        for cat_key in NODE_CATEGORIES.keys():
+            cat_display = t_cat(cat_key)
+            checkbox = QCheckBox(cat_display)
+            checkbox.setChecked(True)
+            checkboxes[cat_key] = checkbox
+            layout.addWidget(checkbox)
+        
+        # Sahnedeki düğümlerin türüne göre kategori gruplandırması
+        layout.addStretch()
+        
+        dialog.setLayout(layout)
+        dialog.exec()
+
     # ── Dosya Menüsü ─────────────────────────────────────────────────
 
     def _position_minimap(self):
@@ -724,8 +855,9 @@ class FlowPyApp(QMainWindow):
             QSlider::sub-page:horizontal { background:#4078c8; border-radius:2px; }
         """)
 
-        self.speedLabel = QLabel("▶▶")
-        self.speedLabel.setStyleSheet("color: #4ade80; font-size: 10px; min-width: 24px;")
+        self.speedLabel = QLabel("0%")
+        self.speedLabel.setStyleSheet("color: #4ade80; font-size: 10px; font-weight: bold; min-width: 28px; text-align: center;")
+        self.speedLabel.setToolTip("Oynatma hızı: 0% = Hızlı, 100% = Yavaş")
 
         layout.addWidget(lbl)
         layout.addWidget(self.speedSlider)
@@ -734,18 +866,38 @@ class FlowPyApp(QMainWindow):
         self.mainToolBar.addSeparator()
         self.mainToolBar.addWidget(speed_widget)
         self.speedSlider.valueChanged.connect(self._on_speed_changed)
+        
+        # İlk hız göstergesini ayarla
+        self._on_speed_changed(0)
 
     def _on_speed_changed(self, value: int):
         delay_ms = int((value / 10) ** 2 * 2000)
         self.interpreter.set_execution_speed(delay_ms)
-        labels = ["▶▶", "▶▶", "▶", "▶", "▷▷", "▷▷", "▷", "▷", "▷", "·▷", "··"]
-        colors = [
-            "#4ade80", "#4ade80", "#4ade80", "#86efac", "#fbbf24", "#fbbf24",
-            "#f59e0b", "#f59e0b", "#ef4444", "#ef4444", "#ef4444",
-        ]
-        self.speedLabel.setText(labels[value])
+        
+        # Hız yüzdesini hesapla (0 = hızlı, 10 = yavaş)
+        speed_percent = int((value / 10) * 100)
+        
+        # Renk ve açıklama
+        if value <= 2:  # 0-20% = Çok hızlı (yeşil)
+            color = "#10b981"
+            desc = "⚡ Çabuk"
+        elif value <= 4:  # 20-40% = Hızlı (açık yeşil)
+            color = "#34d399"
+            desc = "▶ Hızlı"
+        elif value <= 6:  # 40-60% = Normal (sarı)
+            color = "#fbbf24"
+            desc = "● Normal"
+        elif value <= 8:  # 60-80% = Yavaş (turuncu)
+            color = "#f97316"
+            desc = "▼ Yavaş"
+        else:  # 80-100% = Çok yavaş (kırmızı)
+            color = "#ef4444"
+            desc = "🐢 Adım Adım"
+        
+        # Label'ı güncelle: "50% (▶ Hızlı)" formatında
+        self.speedLabel.setText(f"{speed_percent}%\n{desc}")
         self.speedLabel.setStyleSheet(
-            f"color: {colors[value]}; font-size: 10px; min-width: 24px;"
+            f"color: {color}; font-size: 9px; font-weight: bold; min-width: 40px; text-align: center; line-height: 1.2;"
         )
 
     def _setup_file_menu(self):

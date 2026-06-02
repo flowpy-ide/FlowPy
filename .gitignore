@@ -19,3 +19,7 @@ var/
 wheels/
 shared/
 *.egg-info/
+build_exe.py
+BUILD_EXE.md
+.pyinstaller/
+tasarımTakip/

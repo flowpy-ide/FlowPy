@@ -183,6 +183,22 @@
                                 </widget>
                             </item>
                             <item>
+                                <widget class="QPushButton" name="addPageBtn">
+                                    <property name="text">
+                                        <string>+</string>
+                                    </property>
+                                    <property name="maximumSize">
+                                        <size>
+                                            <width>26</width>
+                                            <height>26</height>
+                                        </size>
+                                    </property>
+                                    <property name="toolTip">
+                                        <string>Yeni Sayfa Ekle</string>
+                                    </property>
+                                </widget>
+                            </item>
+                            <item>
                                 <spacer name="bottomBarSpacer2">
                                     <property name="orientation">
                                         <enum>Qt::Orientation::Horizontal</enum>

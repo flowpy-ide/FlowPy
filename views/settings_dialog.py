@@ -10,8 +10,8 @@ from PyQt6.QtWidgets import (
     QStackedWidget, QWidget, QLabel, QComboBox, QRadioButton,
     QButtonGroup, QCheckBox, QPushButton, QGroupBox, QApplication,
 )
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt, QUrl
+from PyQt6.QtGui import QFont, QDesktopServices
 
 from core.settings_manager import SettingsManager
 from core.i18n import t
@@ -47,7 +47,7 @@ class SettingsDialog(QDialog):
 
         self._categories = QListWidget()
         self._categories.setFixedWidth(140)
-        self._cat_keys = ("settings_cat_language", "settings_cat_theme", "settings_cat_general")
+        self._cat_keys = ("settings_cat_language", "settings_cat_theme", "settings_cat_general", "settings_cat_contact")
         for key in self._cat_keys:
             self._categories.addItem(QListWidgetItem(t(key)))
         self._categories.currentRowChanged.connect(self._on_category_changed)
@@ -57,6 +57,7 @@ class SettingsDialog(QDialog):
         self._stack.addWidget(self._page_language())
         self._stack.addWidget(self._page_theme())
         self._stack.addWidget(self._page_general())
+        self._stack.addWidget(self._page_contact())
         layout.addWidget(self._stack, 1)
 
         bottom = QVBoxLayout()
@@ -144,6 +145,44 @@ class SettingsDialog(QDialog):
         layout.addStretch()
         return page
 
+    def _page_contact(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        
+        self._contact_title = QLabel(t("settings_contact_title"))
+        contact_title_font = QFont()
+        contact_title_font.setPointSize(12)
+        contact_title_font.setBold(True)
+        self._contact_title.setFont(contact_title_font)
+        layout.addWidget(self._contact_title)
+        
+        self._contact_desc = QLabel(t("settings_contact_description"))
+        self._contact_desc.setWordWrap(True)
+        self._contact_desc.setStyleSheet(f"color: #aaa; margin-top: 8px; margin-bottom: 16px;")
+        layout.addWidget(self._contact_desc)
+        
+        # İletişim linki butonu
+        self._contact_btn = QPushButton("📧 https://erkanturgut.com/contact")
+        self._contact_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: #2a5cbf;
+                color: white;
+                border: 1px solid #4078c8;
+                border-radius: 4px;
+                padding: 8px 12px;
+                font-size: 11px;
+            }}
+            QPushButton:hover {{ background: #3a6fcf; }}
+            QPushButton:pressed {{ background: #1a4caf; }}
+        """)
+        self._contact_btn.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl("https://erkanturgut.com/contact"))
+        )
+        layout.addWidget(self._contact_btn)
+        
+        layout.addStretch()
+        return page
+
     def _apply_style(self):
         self.setStyleSheet(f"""
             QDialog {{ background: {BG}; color: {TEXT}; }}
@@ -204,6 +243,11 @@ class SettingsDialog(QDialog):
         self._restart_btn.setText(t("settings_restart_now"))
         self._close_btn.setText(t("settings_close"))
         self._reset_btn.setText(t("settings_reset_defaults"))
+        # İletişim sayfası attribute'leri varsa güncelle
+        if hasattr(self, "_contact_title"):
+            self._contact_title.setText(t("settings_contact_title"))
+        if hasattr(self, "_contact_desc"):
+            self._contact_desc.setText(t("settings_contact_description"))
         idx = self._lang_combo.currentIndex()
         self._lang_combo.blockSignals(True)
         self._lang_combo.clear()

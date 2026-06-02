@@ -4,8 +4,8 @@
 # ──────────────────────────────────────────────────────────────────────
 
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QLabel, QLineEdit, QPlainTextEdit,
-    QDialogButtonBox, QFormLayout, QGroupBox, QComboBox,
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit,
+    QDialogButtonBox, QFormLayout, QGroupBox, QComboBox, QPushButton, QWidget,
 )
 from PyQt6.QtGui import QFont
 
@@ -160,10 +160,56 @@ class NodeEditorDialog(QDialog):
         form.addRow(f"{t_prop('prop_function_name')}:", func_edit)
         self._inputs["function_name"] = func_edit
 
-        params_edit = QLineEdit()
-        params_edit.setText(self.node.properties.get("parameters", ""))
-        form.addRow(f"{t_prop('prop_parameters')}:", params_edit)
-        self._inputs["parameters"] = params_edit
+        # Dynamic parameter rows
+        self._param_edits = []
+
+        container = QWidget()
+        outer = QVBoxLayout(container)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(4)
+
+        self._param_rows_layout = QVBoxLayout()
+        self._param_rows_layout.setContentsMargins(0, 0, 0, 0)
+        self._param_rows_layout.setSpacing(3)
+        outer.addLayout(self._param_rows_layout)
+
+        add_btn = QPushButton("＋ Parametre Ekle")
+        add_btn.setStyleSheet("color: #4caf50; font-size: 11px; padding: 2px 6px;")
+        add_btn.clicked.connect(lambda: self._add_param_row(""))
+        outer.addWidget(add_btn)
+
+        params_str = self.node.properties.get("parameters", "")
+        init_params = [p.strip() for p in params_str.split(",") if p.strip()]
+        for p in (init_params or [""]):
+            self._add_param_row(p)
+
+        form.addRow(f"{t_prop('prop_parameters')}:", container)
+
+    def _add_param_row(self, value: str):
+        row = QWidget()
+        hl = QHBoxLayout(row)
+        hl.setContentsMargins(0, 0, 0, 0)
+        hl.setSpacing(4)
+
+        edit = QLineEdit()
+        edit.setText(value)
+        edit.setPlaceholderText("parametre_adı")
+        hl.addWidget(edit)
+
+        del_btn = QPushButton("×")
+        del_btn.setFixedSize(22, 22)
+        del_btn.setStyleSheet("color: #e57373; font-weight: bold;")
+        del_btn.setToolTip("Parametreyi kaldır")
+        del_btn.clicked.connect(lambda: self._remove_param_row(row, edit))
+        hl.addWidget(del_btn)
+
+        self._param_rows_layout.addWidget(row)
+        self._param_edits.append(edit)
+
+    def _remove_param_row(self, row_widget: QWidget, edit: QLineEdit):
+        if edit in self._param_edits:
+            self._param_edits.remove(edit)
+        row_widget.deleteLater()
 
     def _add_return_fields(self, form: QFormLayout):
         expr_edit = QLineEdit()
@@ -186,4 +232,8 @@ class NodeEditorDialog(QDialog):
                 result[key] = widget.text()
             elif isinstance(widget, QComboBox):
                 result[key] = widget.currentText()
+        if hasattr(self, "_param_edits"):
+            result["parameters"] = ", ".join(
+                e.text().strip() for e in self._param_edits if e.text().strip()
+            )
         return result
