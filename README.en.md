@@ -65,15 +65,15 @@ FlowPy is a desktop application for visually modeling and running Python-based a
 
 | Main Screen | File Menu — Examples |
 |-------------|----------------------|
-| ![Main Screen](../uygulama_gorselleri/1.png) | ![Examples Menu](../uygulama_gorselleri/2.png) |
+| ![Main Screen](docs/screenshots/1.png) | ![Examples Menu](docs/screenshots/2.png) |
 
 | Factorial Flow | Running — Input Dialog |
 |----------------|------------------------|
-| ![Factorial Flow](../uygulama_gorselleri/3.png) | ![Input Dialog](../uygulama_gorselleri/4.png) |
+| ![Factorial Flow](docs/screenshots/3.png) | ![Input Dialog](docs/screenshots/4.png) |
 
 | Code Generation | Node Editor |
 |-----------------|-------------|
-| ![Code Generation](../uygulama_gorselleri/5.png) | ![Node Editor](../uygulama_gorselleri/6.png) |
+| ![Code Generation](docs/screenshots/5.png) | ![Node Editor](docs/screenshots/6.png) |
 
 ---
 

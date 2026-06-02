@@ -64,15 +64,15 @@ FlowPy, Python tabanlı algoritma akışlarını **grafiksel olarak** modelleyen
 
 | Ana Ekran | File Menüsü — Örnekler |
 |-----------|----------------------|
-| ![Ana Ekran](../uygulama_gorselleri/1.png) | ![Örnekler Menüsü](../uygulama_gorselleri/2.png) |
+| ![Ana Ekran](docs/screenshots/1.png) | ![Örnekler Menüsü](docs/screenshots/2.png) |
 
 | Faktöriyel Akışı | Çalışma — Girdi Diyaloğu |
 |-----------------|--------------------------|
-| ![Faktöriyel](../uygulama_gorselleri/3.png) | ![Girdi Diyaloğu](../uygulama_gorselleri/4.png) |
+| ![Faktöriyel](docs/screenshots/3.png) | ![Girdi Diyaloğu](docs/screenshots/4.png) |
 
 | Kod Üretimi | Düğüm Düzenleme |
 |-------------|-----------------|
-| ![Kod Üretimi](../uygulama_gorselleri/5.png) | ![Düğüm Düzenle](../uygulama_gorselleri/6.png) |
+| ![Kod Üretimi](docs/screenshots/5.png) | ![Düğüm Düzenle](docs/screenshots/6.png) |
 
 ---
 
