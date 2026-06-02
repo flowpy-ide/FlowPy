@@ -396,6 +396,6 @@ Bu depo henüz bir `LICENSE` dosyası içermemektedir. Resmi dağıtımdan önce
 
 ## Destek
 
-- 🐛 **Hata & özellik talebi:** `https://github.com/<ORG>/<REPO>/issues`
+- 🐛 **Hata & özellik talebi:** `https://github.com/flowpy-ide/FlowPy/issues`
 - 👤 **Proje sahipleri:** Erkan TURGUT, Aslı AYDIN
 - 📦 **Sürüm notları:** GitHub Releases sayfası

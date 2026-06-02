@@ -81,7 +81,7 @@ FlowPy is a desktop application for visually modeling and running Python-based a
 
 ### Install from GitHub Releases
 
-1. Open the [Releases](https://github.com/<ORG>/<REPO>/releases/latest) page.
+1. Open the [Releases](https://github.com/flowpy-ide/FlowPy/releases/latest) page.
 2. Download the latest build: `FlowPy.exe` or `FlowPy-win64.zip`.
 3. If you downloaded a ZIP archive, extract it.
 4. Run `FlowPy.exe`.
@@ -397,6 +397,6 @@ This repository does not yet contain a `LICENSE` file. Add an appropriate open s
 
 ## Support
 
-- 🐛 **Issues & feature requests:** `https://github.com/<ORG>/<REPO>/issues`
+- 🐛 **Issues & feature requests:** `https://github.com/flowpy-ide/FlowPy/issues`
 - 👤 **Maintainers:** Erkan TURGUT, Aslı AYDIN
 - 📦 **Release notes:** GitHub Releases page
